@@ -359,14 +359,17 @@ export async function startFutexManualSession() {
     session.scope = scope;
     await page.waitForTimeout(500);
     const chat = await readFutexConversation(session);
+    const { result: parsedResult, ...conversation } = chat;
     return {
       session,
-      result: {
-        status: "running",
-        manualChat: true,
-        message: "Atendimento aberto. Digite suas respostas abaixo para conversar com a FUTEX.",
-        ...chat,
-      },
+      result: parsedResult
+        ? { ...parsedResult, manualChat: true, ...conversation }
+        : {
+            status: "running",
+            manualChat: true,
+            message: "Atendimento aberto. Digite suas respostas abaixo para conversar com a FUTEX.",
+            ...conversation,
+          },
     };
   } catch (error) {
     await closeFutexSession(session);

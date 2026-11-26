@@ -1,20 +1,14 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import {
-  ArrowLeft,
   Bot,
   Check,
   CheckCheck,
-  ChevronDown,
   CircleHelp,
   Copy,
-  MessageCircle,
   Paperclip,
   Play,
   Send,
   ShieldCheck,
-  Smartphone,
-  Tv,
-  UserRound,
   Wifi,
   X,
 } from "lucide-react";
@@ -323,14 +317,14 @@ function App() {
       return;
     }
 
-    if (step === "install" && /sim|consegui|instalei/i.test(value)) {
-      void generateTest();
+    if (step === "install" && /^(não|nao)/i.test(value)) {
+      addBot("Sem problemas! Escolha uma opção para continuar.");
+      setStep("retry");
       return;
     }
 
-    if (step === "install" && /não|nao|consegui/i.test(value)) {
-      addBot("Sem problemas! Escolha uma opção para continuar.");
-      setStep("retry");
+    if (step === "install" && /^(sim|consegui|instalei)/i.test(value)) {
+      void generateTest();
       return;
     }
 

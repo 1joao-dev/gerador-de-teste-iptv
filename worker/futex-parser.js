@@ -79,6 +79,7 @@ export function extractAccessDetails(text) {
   for (let index = 0; index < lines.length; index += 1) {
     const line = lines[index].replace(/^[🔑✅☑️📌\s]+/u, "").trim();
     if (!line || /^(seus dados de acesso|dados de acesso|dados do teste|acesso liberado|teste gerado|pronto!?|seu teste já está ativo)/i.test(line)) continue;
+    if (/^https?:\/\//i.test(line)) continue;
 
     const pair = line.match(/^([^:=]{2,64})\s*[:=]\s*(.+)$/);
     if (pair) {

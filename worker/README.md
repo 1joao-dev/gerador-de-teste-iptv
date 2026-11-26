@@ -4,13 +4,13 @@ Serviço Node.js persistente que executa Chromium com Playwright para conduzir o
 
 ## Como funciona
 
-1. Recebe nome, WhatsApp, dispositivo e marca do IPTV Flow.
-2. Abre a página pública da FUTEX em um navegador Playwright.
-3. Preenche o atendimento e escolhe as opções correspondentes.
-4. Aguarda a indicação do aplicativo.
-5. Se a preferência `autoConfirmInstall` estiver ativada no IPTV Flow, confirma a etapa automaticamente; caso contrário, aguarda a confirmação feita dentro do app.
-6. Captura o bloco final e entrega os campos de acesso como uma lista dinâmica.
-7. Salva o histórico no diretório persistente configurado em `DATA_DIR`.
+1. Recebe do IPTV Flow o pedido para abrir uma sessão manual.
+2. Abre a página pública da FUTEX em um Chromium persistente no servidor.
+3. Lê as mensagens e opções do chatbot dentro do Shadow DOM e as envia ao painel.
+4. O usuário digita as respostas no IPTV Flow; o worker encaminha cada mensagem à sessão real da FUTEX.
+5. O painel consulta a conversa e apresenta as respostas seguintes, sem abrir o site no celular.
+6. Quando a FUTEX exibe os dados do teste, o parser extrai os campos e o IPTV Flow mostra os botões de cópia.
+7. Salva o histórico e a transcrição criptografada no diretório persistente configurado em `DATA_DIR`.
 
 A automação não tenta resolver CAPTCHA, contornar bloqueios, autenticação, limites ou controles do site. Se a FUTEX alterar o fluxo ou exigir uma ação manual, a solicitação deve parar e sinalizar isso no painel.
 
@@ -71,16 +71,23 @@ Use o resultado para validar os seletores antes de habilitar a automação. O us
 
 Gere duas chaves independentes com `openssl rand -hex 32`: uma para `API_TOKEN` (use o mesmo valor em `WORKER_API_TOKEN` na Vercel) e outra para `DATA_ENCRYPTION_KEY`. A chave de criptografia protege nome, telefone e credenciais no arquivo `jobs.json`. Guarde-a com segurança e nunca a troque enquanto houver dados salvos. Na Vercel, gere `APP_ACCESS_CODE` com `openssl rand -hex 16` e informe esse código uma vez em Configurações no painel.
 
-## Confirmação automática de instalação
+## Conversa manual pelo IPTV Flow
 
-O painel pode enviar `autoConfirmInstall: true` ao criar uma solicitação. Quando a FUTEX pergunta se o aplicativo indicado foi instalado, o worker seleciona a opção afirmativa automaticamente e aguarda as credenciais. O padrão é desativado. A preferência é configurada no próprio IPTV Flow e só deve ser ativada se a resposta afirmativa corresponder ao uso real. Quando desativada, a pergunta aparece dentro do painel e não exige abrir a FUTEX.
+- Abra um atendimento com `POST /api/test-requests` enviando `{ "manualChat": true }`.
+- Consulte `GET /api/test-requests/:id` para receber `chatMessages`, `chatOptions` e `chatInputPlaceholder`.
+- Envie texto com `POST /api/test-requests/:id/chat` e `{ "message": "resposta digitada pelo usuário" }`.
+- Quando o chatbot apresentar opções rápidas, o painel pode enviar `{ "option": "texto exato da opção" }`.
+- O worker não preenche dados nem confirma etapas por conta própria no modo manual. O usuário conduz o atendimento.
+- A transcrição da conversa é criptografada junto com os dados privados no histórico persistido.
 
 ## Endpoints
 
 - `GET /health`: health check público de liveness usado pelo Railway.
 - `GET /api/health`: estado autenticado do serviço e da automação.
 - `GET /api/diagnostics/futex`: diagnóstico de leitura do site, sem enviar formulários.
-- `POST /api/test-requests`: inicia uma solicitação.
+- `POST /api/test-requests`: inicia uma sessão manual com `{ "manualChat": true }`.
+- `GET /api/test-requests/:id`: retorna a conversa atual e o status.
+- `POST /api/test-requests/:id/chat`: encaminha uma mensagem ou opção escolhida pelo usuário.
 - `GET /api/test-requests`: lista o histórico persistido.
 - `GET /api/test-requests/:id`: consulta uma solicitação.
 - `POST /api/test-requests/:id/app-confirmation`: recebe `{ "installed": true | false }` e responde imediatamente; o painel acompanha o processamento por polling.

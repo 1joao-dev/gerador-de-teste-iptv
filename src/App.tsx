@@ -345,7 +345,7 @@ function App() {
     }
   }
 
-  async function refreshFlowRequest() {
+  async function refreshFlowRequest(silent = false) {
     if (!API_BASE_URL || !flowRequest) {
       setToast("A atualização ficará disponível quando a automação estiver conectada.");
       return;
@@ -361,13 +361,19 @@ function App() {
       if (hasTestResult(updated)) setFlowStage("result");
       else if (updated.recommendedApp && updated.appInstalled !== true) setFlowStage("install");
       else setFlowStage("waiting");
-      setToast("Status atualizado.");
+      if (!silent) setToast("Status atualizado.");
     } catch (error) {
-      setToast(error instanceof Error ? error.message : "Falha ao consultar o andamento.");
+      if (!silent) setToast(error instanceof Error ? error.message : "Falha ao consultar o andamento.");
     } finally {
       setRefreshingFlow(false);
     }
   }
+
+  useEffect(() => {
+    if (!API_BASE_URL || !flowRequest || flowStage !== "waiting" || !["queued", "running"].includes(flowRequest.status)) return;
+    const interval = window.setInterval(() => { void refreshFlowRequest(true); }, 5_000);
+    return () => window.clearInterval(interval);
+  }, [flowRequest?.id, flowRequest?.status, flowStage]);
 
   async function copyValue(label: string, value?: string) {
     if (!value) return;
@@ -602,7 +608,7 @@ function App() {
                     {flowStage === "waiting" && flowRequest && (
                       <>
                         <div className="flow-state-heading"><span className="step-number">04</span><div><h3>Solicitação em andamento</h3><p>Os dados foram enviados ao serviço de automação.</p></div><StatusPill status={flowRequest.status} /></div>
-                        <div className="waiting-state"><span className="waiting-state-icon"><LoaderCircle size={25} className="spin" /></span><strong>{flowRequest.status === "needs_human" ? "Ação manual necessária" : "Aguardando resposta da FUTEX"}</strong><p>{flowRequest.message || "Quando a FUTEX indicar o aplicativo ou retornar os dados do teste, eles aparecerão aqui."}</p></div>
+                        <div className="waiting-state"><span className="waiting-state-icon"><LoaderCircle size={25} className="spin" /></span><strong>{flowRequest.status === "needs_human" ? "Ação manual necessária" : flowRequest.status === "failed" ? "Não foi possível concluir" : "Aguardando resposta da FUTEX"}</strong><p>{flowRequest.message || "Quando a FUTEX indicar o aplicativo ou retornar os dados do teste, eles aparecerão aqui."}</p></div>
                         <div className="flow-wait-actions"><button className="secondary-button" type="button" onClick={() => void refreshFlowRequest()} disabled={refreshingFlow}>{refreshingFlow ? <LoaderCircle className="spin" size={15} /> : <RefreshCw size={15} />} Atualizar status</button><button className="back-button" type="button" onClick={() => { setFlowStage("form"); setFlowRequest(null); }}>Voltar ao formulário</button></div>
                       </>
                     )}

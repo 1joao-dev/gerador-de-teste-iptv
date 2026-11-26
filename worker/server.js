@@ -191,7 +191,7 @@ app.get("/api/diagnostics/futex", async (_req, res) => {
     return res.json(diagnostic);
   } catch (error) {
     return res.status(502).json({
-      message: error instanceof Error ? error.message : "Não foi possível abrir o site FUTEX.",
+      message: error instanceof Error ? error.message : "Não foi possível iniciar o atendimento em segundo plano.",
     });
   }
 });
@@ -248,14 +248,14 @@ app.post("/api/test-requests", async (req, res) => {
     status: "queued",
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
-    message: "Solicitação recebida. Abrindo o atendimento FUTEX.",
+    message: "Solicitação recebida. Preparando a geração do teste.",
   };
   jobs.set(id, job);
   await persistJobs();
   res.status(202).json(safeJob(job));
 
   void (async () => {
-    updateJob(id, { status: "running", message: "Navegando até o atendimento FUTEX." });
+    updateJob(id, { status: "running", message: "Iniciando o atendimento automaticamente." });
     try {
       const { session, result } = await startFutexSession(job);
       if (session) {

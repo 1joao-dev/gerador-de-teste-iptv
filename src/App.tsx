@@ -37,7 +37,7 @@ import {
 import { API_BASE_URL } from "./config";
 
 type Page = "overview" | "new" | "history" | "settings";
-type RequestStatus = "draft" | "queued" | "running" | "completed" | "failed";
+type RequestStatus = "draft" | "queued" | "running" | "awaiting_app" | "completed" | "failed";
 
 type TestRequest = {
   id: string;
@@ -51,18 +51,32 @@ type TestRequest = {
   password?: string;
   code?: string;
   duration?: string;
+  recommendedApp?: string;
+  appGuideUrl?: string;
+  appInstalled?: boolean;
   message?: string;
 };
 
 const STORAGE_KEY = "iptv-automator-requests-v1";
 
 const devices = [
-  { label: "Smart TV", detail: "Samsung, LG, TCL e outras", icon: Tv },
-  { label: "TV Box", detail: "Android TV e TV Box", icon: Monitor },
-  { label: "Fire TV Stick", detail: "Amazon Fire TV", icon: RadioTower },
-  { label: "Celular", detail: "Android ou iPhone", icon: Smartphone },
-  { label: "Computador", detail: "Windows, macOS ou Linux", icon: Command },
+  { label: "Smart TV", detail: "Televisores inteligentes", icon: Tv },
+  { label: "Android TV", detail: "Sistema Android para TV", icon: Monitor },
+  { label: "Roku TV", detail: "Televisores com Roku", icon: Tv },
+  { label: "TV Box", detail: "Box e aparelhos Android", icon: Monitor },
+  { label: "Celular Android", detail: "Smartphones Android", icon: Smartphone },
+  { label: "iPhone / iPad", detail: "Dispositivos Apple", icon: Smartphone },
+  { label: "Computador", detail: "Windows ou macOS", icon: Command },
+  { label: "Fire Stick", detail: "Amazon Fire TV Stick", icon: RadioTower },
+  { label: "Xbox", detail: "Console Xbox", icon: Monitor },
+  { label: "XCIPTV", detail: "Aplicativo XCIPTV", icon: Smartphone },
+  { label: "IPTV Smarters", detail: "Aplicativo IPTV Smarters", icon: Smartphone },
+  { label: "Lista M3U", detail: "Reprodutor compatível com M3U", icon: Monitor },
+  { label: "SS IPTV", detail: "Aplicativo SS IPTV", icon: Tv },
+  { label: "Duplecast", detail: "Aplicativo Duplecast", icon: Smartphone },
 ];
+
+const brands = ["Samsung", "LG", "TCL", "Sony", "Philips", "Panasonic", "Philco", "AOC", "Roku", "Outra (digitar)"];
 
 
 function formatDate(value: string) {
@@ -91,6 +105,7 @@ function statusLabel(status: RequestStatus) {
     draft: "Rascunho",
     queued: "Na fila",
     running: "Em execução",
+    awaiting_app: "Instalar aplicativo",
     completed: "Concluído",
     failed: "Falhou",
   };
@@ -115,6 +130,10 @@ function App() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState<TestRequest | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [confirmingApp, setConfirmingApp] = useState(false);
+  const [flowRequest, setFlowRequest] = useState<TestRequest | null>(null);
+  const [flowStage, setFlowStage] = useState<"form" | "install" | "waiting" | "result">("form");
+  const [brandOther, setBrandOther] = useState("");
   const [form, setForm] = useState({
     customerName: "",
     contact: "",
@@ -144,7 +163,7 @@ function App() {
 
   const stats = useMemo(() => ({
     total: requests.length,
-    queued: requests.filter((item) => item.status === "queued" || item.status === "draft").length,
+    queued: requests.filter((item) => item.status === "queued" || item.status === "draft" || item.status === "awaiting_app").length,
     completed: requests.filter((item) => item.status === "completed").length,
     failed: requests.filter((item) => item.status === "failed").length,
   }), [requests]);
@@ -173,8 +192,9 @@ function App() {
   async function submitRequest(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const phoneDigits = form.contact.replace(/\D/g, "");
-    if (!form.customerName.trim() || phoneDigits.length < 10 || !form.device || !form.brand.trim()) {
-      setToast("Preencha nome, celular, tipo de dispositivo e marca.");
+    const selectedBrand = form.brand === "Outra (digitar)" ? brandOther.trim() : form.brand;
+    if (!form.customerName.trim() || phoneDigits.length < 10 || !form.device || !selectedBrand) {
+      setToast("Preencha nome, celular, onde vai assistir e marca.");
       return;
     }
 
@@ -183,7 +203,7 @@ function App() {
       customerName: form.customerName.trim(),
       contact: form.contact.trim(),
       device: form.device,
-      brand: form.brand,
+      brand: selectedBrand,
     };
 
     if (API_BASE_URL) {
@@ -195,25 +215,30 @@ function App() {
         });
         const result = await response.json().catch(() => ({}));
         if (!response.ok) {
-          throw new Error(result.message || "O servidor não conseguiu receber a solicitação.");
+          throw new Error(result.message || "O servidor não conseguiu iniciar o atendimento.");
         }
         const request: TestRequest = {
           id: result.id ?? makeId(),
           ...payload,
-          status: result.status ?? "queued",
+          status: result.status ?? (result.recommendedApp ? "awaiting_app" : "queued"),
           createdAt: result.createdAt ?? new Date().toISOString(),
           username: result.username,
           password: result.password,
           code: result.code,
           duration: result.duration,
+          recommendedApp: result.recommendedApp,
+          appGuideUrl: result.appGuideUrl,
+          appInstalled: result.appInstalled,
           message: result.message,
         };
         setRequests((current) => [request, ...current]);
-        setToast("Solicitação enviada para a automação.");
+        setFlowRequest(request);
+        setFlowStage(request.username || request.password ? "result" : request.recommendedApp ? "install" : "waiting");
+        setToast(request.recommendedApp ? "Aplicativo recomendado recebido." : "Solicitação enviada para a automação.");
         setForm({ customerName: "", contact: "", device: "", brand: "" });
-        setPage("history");
+        setBrandOther("");
       } catch (error) {
-        setToast(error instanceof Error ? error.message : "Falha ao enviar a solicitação.");
+        setToast(error instanceof Error ? error.message : "Falha ao iniciar a solicitação.");
       } finally {
         setSubmitting(false);
       }
@@ -225,13 +250,66 @@ function App() {
       ...payload,
       status: "draft",
       createdAt: new Date().toISOString(),
-      message: "Rascunho local. Integração com o serviço de automação ainda não configurada.",
+      message: "Rascunho local. Nenhum teste foi solicitado ou gerado porque o backend ainda não está conectado.",
     };
     setRequests((current) => [draft, ...current]);
     setSubmitting(false);
     setToast("Rascunho salvo neste navegador. Nenhum teste foi gerado.");
-    setForm({ customerName: "", contact: "", device: "Smart TV", brand: "" });
+    setForm({ customerName: "", contact: "", device: "", brand: "" });
+    setBrandOther("");
     setPage("history");
+  }
+
+  async function confirmAppInstalled(installed: boolean) {
+    if (!API_BASE_URL || !flowRequest) {
+      setToast("A confirmação será habilitada quando a automação estiver conectada.");
+      return;
+    }
+    setConfirmingApp(true);
+    try {
+      const response = await fetch(
+        API_BASE_URL.replace(/\/$/, "") + "/api/test-requests/" + encodeURIComponent(flowRequest.id) + "/app-confirmation",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ installed }),
+        },
+      );
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.message || "Não foi possível enviar a confirmação.");
+      const updated: TestRequest = {
+        ...flowRequest,
+        ...result,
+        appInstalled: installed,
+        status: result.status ?? (installed ? "running" : "awaiting_app"),
+      };
+      setFlowRequest(updated);
+      setRequests((current) => current.map((item) => item.id === updated.id ? updated : item));
+      if (updated.username || updated.password) {
+        setFlowStage("result");
+        setToast("Teste recebido. Confira os dados de acesso.");
+      } else if (installed) {
+        setFlowStage("waiting");
+        setToast("Confirmação enviada. Aguardando a geração do teste.");
+      } else {
+        setFlowStage("install");
+        setToast(updated.message || "Instale o aplicativo recomendado e tente novamente.");
+      }
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : "Falha ao confirmar a instalação.");
+    } finally {
+      setConfirmingApp(false);
+    }
+  }
+
+  async function copyValue(label: string, value?: string) {
+    if (!value) return;
+    try {
+      await navigator.clipboard.writeText(value);
+      setToast(label + " copiado.");
+    } catch {
+      setToast("Não foi possível copiar neste dispositivo.");
+    }
   }
 
   async function refreshHistory() {
@@ -417,31 +495,70 @@ function App() {
                 <button className="back-button" onClick={() => navigate("overview")}>Voltar ao painel</button>
               </div>
               <div className="new-test-layout">
-                <form className="panel request-form" onSubmit={submitRequest}>
-                  <div className="form-section-heading"><span className="step-number">01</span><div><h3>Dados do cliente</h3><p>Identificação para organizar a solicitação.</p></div></div>
-                  <div className="form-grid two-columns">
-                    <label className="field"><span>Nome completo <small>OBRIGATÓRIO</small></span><input value={form.customerName} onChange={(event) => updateForm("customerName", event.target.value)} placeholder="Digite o nome do cliente" autoComplete="name" required /></label>
-                    <label className="field"><span>Celular com DDD <small>OBRIGATÓRIO</small></span><input type="tel" inputMode="tel" value={form.contact} onChange={(event) => updateForm("contact", formatPhone(event.target.value))} placeholder="(00) 00000-0000" autoComplete="tel" required /></label>
-                  </div>
-                  <div className="form-separator" />
-                  <div className="form-section-heading"><span className="step-number">02</span><div><h3>Tipo de dispositivo</h3><p>Selecione o aparelho utilizado pelo cliente.</p></div></div>
-                  <div className="device-grid">
-                    {devices.map((device) => {
-                      const Icon = device.icon;
-                      return <button type="button" key={device.label} className={"device-option " + (form.device === device.label ? "selected" : "")} onClick={() => updateForm("device", device.label)}>
-                        <span className="device-icon"><Icon size={20} /></span><strong>{device.label}</strong><small>{device.detail}</small>{form.device === device.label && <span className="selected-check"><Check size={12} /></span>}
-                      </button>;
-                    })}
-                  </div>
-                  <div className="form-separator" />
-                  <div className="form-section-heading"><span className="step-number">03</span><div><h3>Marca do dispositivo</h3><p>Informe o fabricante ou a marca do aparelho.</p></div></div>
-                  <label className="field"><span>Marca <small>OBRIGATÓRIO</small></span><input value={form.brand} onChange={(event) => updateForm("brand", event.target.value)} placeholder="Ex.: Samsung, LG, Amazon..." required /></label>
-                  <div className="form-actions"><span><LockKeyhole size={13} /> Seus dados são enviados somente ao backend configurado.</span><button className="primary-button" type="submit" disabled={submitting}>{submitting ? <LoaderCircle className="spin" size={16} /> : <Zap size={16} />}{submitting ? "Enviando..." : API_BASE_URL ? "Enviar solicitação" : "Salvar rascunho"}<ArrowRight size={15} /></button></div>
-                </form>
+                {flowStage === "form" ? (
+                  <form className="panel request-form" onSubmit={submitRequest}>
+                    <div className="form-section-heading"><span className="step-number">01</span><div><h3>Dados do cliente</h3><p>Primeiro, informe quem receberá o teste.</p></div></div>
+                    <div className="form-grid two-columns">
+                      <label className="field"><span>Nome completo <small>OBRIGATÓRIO</small></span><input value={form.customerName} onChange={(event) => updateForm("customerName", event.target.value)} placeholder="Digite o nome do cliente" autoComplete="name" required /></label>
+                      <label className="field"><span>WhatsApp com DDD <small>OBRIGATÓRIO</small></span><input type="tel" inputMode="tel" value={form.contact} onChange={(event) => updateForm("contact", formatPhone(event.target.value))} placeholder="(00) 00000-0000" autoComplete="tel" required /></label>
+                    </div>
+                    <div className="form-separator" />
+                    <div className="form-section-heading"><span className="step-number">02</span><div><h3>Onde vai assistir?</h3><p>Escolha uma das opções apresentadas no atendimento FUTEX.</p></div></div>
+                    <div className="device-grid">
+                      {devices.map((device) => {
+                        const Icon = device.icon;
+                        return <button type="button" key={device.label} className={"device-option " + (form.device === device.label ? "selected" : "")} onClick={() => updateForm("device", device.label)}>
+                          <span className="device-icon"><Icon size={20} /></span><strong>{device.label}</strong><small>{device.detail}</small>{form.device === device.label && <span className="selected-check"><Check size={12} /></span>}
+                        </button>;
+                      })}
+                    </div>
+                    <div className="form-separator" />
+                    <div className="form-section-heading"><span className="step-number">03</span><div><h3>Qual é a marca?</h3><p>Selecione a marca do aparelho, como no bot da FUTEX.</p></div></div>
+                    <div className="choice-chips">
+                      {brands.map((brand) => <button type="button" key={brand} className={"choice-chip " + (form.brand === brand ? "selected" : "")} onClick={() => updateForm("brand", brand)}>{brand}{form.brand === brand && <Check size={13} />}</button>)}
+                    </div>
+                    {form.brand === "Outra (digitar)" && <label className="field brand-other-field"><span>Digite a marca <small>OBRIGATÓRIO</small></span><input value={brandOther} onChange={(event) => setBrandOther(event.target.value)} placeholder="Informe a marca do aparelho" /></label>}
+                    <div className="form-actions"><span><LockKeyhole size={13} /> O teste só será solicitado após conectar o backend.</span><button className="primary-button" type="submit" disabled={submitting}>{submitting ? <LoaderCircle className="spin" size={16} /> : <Zap size={16} />}{submitting ? "Enviando..." : API_BASE_URL ? "Iniciar atendimento" : "Salvar rascunho"}<ArrowRight size={15} /></button></div>
+                  </form>
+                ) : (
+                  <section className="panel flow-state-panel">
+                    {flowStage === "install" && flowRequest && (
+                      <>
+                        <div className="flow-state-heading"><span className="step-number">04</span><div><h3>Aplicativo recomendado</h3><p>Esta é a etapa de instalação mostrada pela FUTEX.</p></div><StatusPill status="awaiting_app" /></div>
+                        <div className="app-recommendation-card"><span className="app-recommendation-icon"><Monitor size={24} /></span><div><small>APLICATIVO INDICADO</small><strong>{flowRequest.recommendedApp}</strong><p>Para {flowRequest.device} {flowRequest.brand}.</p></div></div>
+                        {flowRequest.appGuideUrl && <a className="external-link guide-link" href={flowRequest.appGuideUrl} target="_blank" rel="noreferrer">Assistir ao tutorial de instalação <ArrowUpRight size={14} /></a>}
+                        {flowRequest.message && <p className="detail-message">{flowRequest.message}</p>}
+                        <div className="flow-question"><strong>Conseguiu instalar o {flowRequest.recommendedApp}?</strong><p>Confirme para que a automação continue o atendimento.</p></div>
+                        <div className="flow-action-row"><button className="secondary-button" type="button" onClick={() => void confirmAppInstalled(false)} disabled={confirmingApp}>{confirmingApp ? <LoaderCircle className="spin" size={15} /> : <X size={15} />} Não consegui</button><button className="primary-button" type="button" onClick={() => void confirmAppInstalled(true)} disabled={confirmingApp}>{confirmingApp ? <LoaderCircle className="spin" size={15} /> : <Check size={15} />} Sim, consegui</button></div>
+                      </>
+                    )}
+                    {flowStage === "waiting" && flowRequest && (
+                      <>
+                        <div className="flow-state-heading"><span className="step-number">04</span><div><h3>Solicitação em andamento</h3><p>Os dados foram enviados ao serviço de automação.</p></div><StatusPill status={flowRequest.status} /></div>
+                        <div className="waiting-state"><span className="waiting-state-icon"><LoaderCircle size={25} className="spin" /></span><strong>Aguardando resposta da FUTEX</strong><p>{flowRequest.message || "Quando a FUTEX indicar o aplicativo ou retornar os dados do teste, eles aparecerão aqui."}</p></div>
+                        <button className="back-button" type="button" onClick={() => { setFlowStage("form"); setFlowRequest(null); }}>Voltar ao formulário</button>
+                      </>
+                    )}
+                    {flowStage === "result" && flowRequest && (
+                      <>
+                        <div className="flow-state-heading"><span className="step-number">05</span><div><h3>Teste gerado com sucesso</h3><p>Confira os dados retornados pela FUTEX.</p></div><StatusPill status="completed" /></div>
+                        <div className="success-duration"><CheckCircle2 size={19} /><div><strong>Teste ativo</strong><span>{flowRequest.duration || "6 horas"} de duração</span></div></div>
+                        <div className="credential-grid">
+                          {flowRequest.code && <div className="credential-card"><span>CÓDIGO UNIPLAY</span><strong>{flowRequest.code}</strong><button type="button" onClick={() => void copyValue("Código", flowRequest.code)}><Copy size={13} /> Copiar</button></div>}
+                          {flowRequest.username && <div className="credential-card"><span>USUÁRIO</span><strong>{flowRequest.username}</strong><button type="button" onClick={() => void copyValue("Usuário", flowRequest.username)}><Copy size={13} /> Copiar</button></div>}
+                          {flowRequest.password && <div className="credential-card"><span>SENHA</span><strong>{flowRequest.password}</strong><button type="button" onClick={() => void copyValue("Senha", flowRequest.password)}><Copy size={13} /> Copiar</button></div>}
+                        </div>
+                        <button className="primary-button copy-all-button" type="button" onClick={() => void copyResult(flowRequest)}><Copy size={15} /> Copiar todos os dados</button>
+                        <div className="result-note"><Clock3 size={16} /><p>Para efetuar o pagamento, aguarde pelo menos <strong>2 horas</strong> após o início do teste. Se precisar assinar depois do teste, volte ao site onde iniciou o atendimento.</p></div>
+                        <button className="back-button" type="button" onClick={() => { setFlowStage("form"); setFlowRequest(null); setPage("history"); }}>Concluir e abrir histórico</button>
+                      </>
+                    )}
+                  </section>
+                )}
 
                 <aside className="new-test-aside">
-                  <div className="panel summary-card"><div className="summary-top"><span className="summary-icon"><Sparkles size={17} /></span><span>RESUMO</span></div><h3>Revise os dados</h3><p>Confira os dados antes de enviar a solicitação.</p><div className="summary-items"><div><span>Dispositivo</span><strong>{form.device || "Não selecionado"}</strong></div><div><span>Marca</span><strong>{form.brand || "Não selecionada"}</strong></div></div><div className="summary-foot"><ShieldCheck size={15} /><span>O resultado só será exibido após confirmação do serviço de automação.</span></div></div>
-                  <div className="info-card"><div className="info-card-icon"><CircleHelp size={18} /></div><div><strong>Como funciona?</strong><p>Após conectar o worker autorizado, esta solicitação será enviada ao servidor, processada e acompanhada pelo histórico.</p></div></div>
+                  <div className="panel summary-card"><div className="summary-top"><span className="summary-icon"><Sparkles size={17} /></span><span>RESUMO</span></div><h3>Dados do atendimento</h3><p>Informações que serão enviadas ao fluxo automatizado.</p><div className="summary-items"><div><span>Cliente</span><strong>{form.customerName || flowRequest?.customerName || "Não informado"}</strong></div><div><span>WhatsApp</span><strong>{form.contact || flowRequest?.contact || "Não informado"}</strong></div><div><span>Onde vai assistir</span><strong>{form.device || flowRequest?.device || "Não selecionado"}</strong></div><div><span>Marca</span><strong>{(form.brand === "Outra (digitar)" ? brandOther : form.brand) || flowRequest?.brand || "Não selecionada"}</strong></div></div><div className="summary-foot"><ShieldCheck size={15} /><span>Credenciais só serão mostradas quando forem retornadas pelo serviço real.</span></div></div>
+                  <div className="info-card"><div className="info-card-icon"><CircleHelp size={18} /></div><div><strong>Fluxo confirmado</strong><p>Nome, WhatsApp, dispositivo, marca, recomendação do aplicativo e confirmação de instalação antes da geração do teste.</p></div></div>
                 </aside>
               </div>
             </section>
@@ -461,7 +578,7 @@ function App() {
                   </tbody></table></div>
                 )}
               </section>
-              {selectedRequest && <section className="panel detail-panel"><div className="panel-heading"><div><h3>Detalhes da solicitação</h3><p>{selectedRequest.id}</p></div><button className="icon-button" onClick={() => setSelectedRequest(null)} aria-label="Fechar detalhes"><X size={17} /></button></div><div className="detail-grid"><div><span>Cliente</span><strong>{selectedRequest.customerName || "Não informado"}</strong></div><div><span>Contato</span><strong>{selectedRequest.contact || "Não informado"}</strong></div><div><span>Dispositivo</span><strong>{selectedRequest.device}</strong></div><div><span>Marca</span><strong>{selectedRequest.brand}</strong></div><div><span>Status</span><StatusPill status={selectedRequest.status} /></div></div>{selectedRequest.message && <p className="detail-message">{selectedRequest.message}</p>}{(selectedRequest.username || selectedRequest.password || selectedRequest.code) && <div className="result-box"><div><strong>Dados retornados pelo serviço</strong><button className="text-button" onClick={() => void copyResult(selectedRequest)}><Copy size={14} /> Copiar</button></div>{selectedRequest.code && <p>Código: <b>{selectedRequest.code}</b></p>}{selectedRequest.username && <p>Usuário: <b>{selectedRequest.username}</b></p>}{selectedRequest.password && <p>Senha: <b>{selectedRequest.password}</b></p>}{selectedRequest.duration && <p>Duração: <b>{selectedRequest.duration}</b></p>}</div>}</section>}
+              {selectedRequest && <section className="panel detail-panel"><div className="panel-heading"><div><h3>Detalhes da solicitação</h3><p>{selectedRequest.id}</p></div><button className="icon-button" onClick={() => setSelectedRequest(null)} aria-label="Fechar detalhes"><X size={17} /></button></div><div className="detail-grid"><div><span>Cliente</span><strong>{selectedRequest.customerName || "Não informado"}</strong></div><div><span>Contato</span><strong>{selectedRequest.contact || "Não informado"}</strong></div><div><span>Dispositivo</span><strong>{selectedRequest.device}</strong></div><div><span>Marca</span><strong>{selectedRequest.brand}</strong></div><div><span>Status</span><StatusPill status={selectedRequest.status} /></div></div>{selectedRequest.message && <p className="detail-message">{selectedRequest.message}</p>}{(selectedRequest.username || selectedRequest.password || selectedRequest.code) && <div className="result-box"><div><strong>Dados retornados pelo serviço</strong><button className="text-button" onClick={() => void copyResult(selectedRequest)}><Copy size={14} /> Copiar</button></div>{selectedRequest.recommendedApp && <p>Aplicativo: <b>{selectedRequest.recommendedApp}</b></p>}{selectedRequest.code && <p>Código Uniplay: <b>{selectedRequest.code}</b></p>}{selectedRequest.username && <p>Usuário: <b>{selectedRequest.username}</b></p>}{selectedRequest.password && <p>Senha: <b>{selectedRequest.password}</b></p>}{selectedRequest.duration && <p>Duração: <b>{selectedRequest.duration}</b></p>}{selectedRequest.status === "completed" && <p>Orientação: aguarde pelo menos <b>2 horas</b> após o início do teste antes de efetuar pagamento.</p>}</div>}</section>}
             </section>
           )}
 

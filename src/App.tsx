@@ -3,7 +3,6 @@ import {
   Bot,
   Check,
   CheckCheck,
-  CircleHelp,
   Copy,
   Paperclip,
   Play,
@@ -142,7 +141,7 @@ function App() {
     if (!TEST_API_URL) {
       setBusy(false);
       setStep("error");
-      addBot("O atendimento está pronto, mas a geração ainda precisa ser conectada ao serviço que fornece os testes. Assim que a integração oficial estiver configurada, seus dados de acesso aparecerão aqui automaticamente.");
+      addBot("Não foi possível concluir a geração do teste agora. Tente novamente em instantes ou fale com o atendimento.");
       return;
     }
 
@@ -351,9 +350,6 @@ function App() {
             <span><i /> online agora</span>
           </div>
           <div className="header-actions">
-            <button className="header-icon" type="button" aria-label="Ajuda" title="Ajuda">
-              <CircleHelp size={18} />
-            </button>
             <button className="header-icon close-button" type="button" aria-label="Reiniciar conversa" onClick={resetConversation}>
               <X size={21} strokeWidth={3} />
             </button>
@@ -370,9 +366,9 @@ function App() {
                     <div className="video-preview">
                       <div className="video-orb" />
                       <div className="video-grid" />
-                      <button type="button" className="video-play" aria-label="Reproduzir demonstração">
+                      <div className="video-play" aria-hidden="true">
                         <Play size={22} fill="currentColor" />
-                      </button>
+                      </div>
                       <span className="video-controls"><Play size={13} fill="currentColor" /><span /><Wifi size={15} /></span>
                     </div>
                     <span className="message-time">{message.time}</span>
@@ -427,9 +423,9 @@ function App() {
         </div>
 
         <form className="chat-composer" onSubmit={handleSend}>
-          <button type="button" className="composer-attach" aria-label="Anexar arquivo">
+          <span className="composer-attach" aria-hidden="true">
             <Paperclip size={22} />
-          </button>
+          </span>
           <input
             ref={inputRef}
             value={draft}

@@ -147,6 +147,12 @@ app.use(rateLimit({
 }));
 
 app.get("/health", (_req, res) => {
+  res.json({ status: "ok", service: "iptv-flow-worker" });
+});
+
+app.use("/api", requireApiToken);
+
+app.get("/api/health", (_req, res) => {
   res.setHeader("Cache-Control", "no-store");
   res.json({
     status: "ok",
@@ -156,8 +162,6 @@ app.get("/health", (_req, res) => {
     storedRequests: jobs.size,
   });
 });
-
-app.use("/api", requireApiToken);
 
 app.get("/api/diagnostics/futex", async (_req, res) => {
   try {

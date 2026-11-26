@@ -1,7 +1,5 @@
 import crypto from "node:crypto";
 
-export const config = { maxDuration: 60 };
-
 const allowedRoutes = [
   { method: "GET", pattern: /^\/api\/health$/ },
   { method: "GET", pattern: /^\/api\/diagnostics\/futex$/ },

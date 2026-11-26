@@ -420,7 +420,7 @@ function App() {
   }
 
   useEffect(() => {
-    if (!API_BASE_URL || !flowRequest || flowStage !== "waiting" || !["queued", "running"].includes(flowRequest.status)) return;
+    if (!API_BASE_URL || !flowRequest || !["waiting", "install"].includes(flowStage) || !["queued", "running", "awaiting_app"].includes(flowRequest.status)) return;
     const interval = window.setInterval(() => { void refreshFlowRequest(true); }, 5_000);
     return () => window.clearInterval(interval);
   }, [flowRequest?.id, flowRequest?.status, flowStage]);

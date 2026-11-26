@@ -44,7 +44,7 @@ O Vite encaminha `/api/worker/*` para `http://127.0.0.1:8787`. O worker aceita c
 
 ## Verificar a página FUTEX
 
-Com o worker iniciado, abra o IPTV Flow e vá a **Configurações → Diagnosticar FUTEX**. O diagnóstico abre a página sem enviar dados de cliente nem iniciar um teste e retorna:
+Com o worker iniciado, abra o IPTV Flow e vá a **Configurações → Diagnosticar FUTEX**. O diagnóstico abre a página e, se houver um botão inicial conhecido, abre apenas o início do chatbot — sem preencher dados de cliente nem confirmar a geração de teste — e retorna:
 - título e URL carregada;
 - frames/iframes encontrados;
 - textos visíveis;

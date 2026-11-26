@@ -49,4 +49,4 @@ Publique este diretório como um serviço Node.js persistente. Comando de build:
 npx playwright install --with-deps chromium
 ```
 
-Configure as variáveis listadas em `.env.example`. No Vercel, defina `VITE_API_BASE_URL` para a URL pública deste worker e `VITE_API_TOKEN` com o mesmo token de acesso. Para um app multiusuário, substitua o token compartilhado por autenticação individual no backend.
+Configure as variáveis listadas em `.env.example`. No Vercel, defina `VITE_API_BASE_URL` para a URL pública deste worker. Depois, abra **Configurações** no IPTV Flow e informe o mesmo `API_TOKEN` configurado no worker. A chave fica no armazenamento local do navegador e esta configuração serve apenas para um painel privado de administrador. Não publique o painel com um token compartilhado; para vários usuários, implemente autenticação individual no backend.

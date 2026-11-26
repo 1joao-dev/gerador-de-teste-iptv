@@ -51,7 +51,12 @@ test("criptografa nome, telefone e credenciais no histórico persistido", () => 
   assert.equal(restored.username, job.username);
   assert.equal(restored.password, job.password);
   assert.equal(restored.code, job.code);
+  assert.equal(restored.privateDataEncrypted, undefined);
   assert.equal(restored.status, job.status);
+
+  const storedAgain = protectJobForStorage(restored, key);
+  assert.equal(storedAgain.customerName, undefined);
+  assert.equal(JSON.stringify(storedAgain).includes("Cliente Exemplo"), false);
 });
 
 test("detecta chave incorreta sem revelar os dados", () => {

@@ -1,5 +1,7 @@
 import crypto from "node:crypto";
 
+export const config = { maxDuration: 60 };
+
 const allowedRoutes = [
   { method: "GET", pattern: /^\/api\/health$/ },
   { method: "GET", pattern: /^\/api\/diagnostics\/futex$/ },
@@ -65,7 +67,7 @@ export default async function handler(req, res) {
         ...(req.method === "POST" ? { "Content-Type": "application/json" } : {}),
       },
       body: req.method === "POST" ? JSON.stringify(req.body ?? {}) : undefined,
-      signal: AbortSignal.timeout(20_000),
+      signal: AbortSignal.timeout(45_000),
     });
 
     const body = await upstream.text();

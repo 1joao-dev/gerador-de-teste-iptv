@@ -86,10 +86,7 @@ Gere duas chaves independentes com `openssl rand -hex 32`: uma para `API_TOKEN` 
 - `GET /api/health`: estado autenticado do serviço e da automação.
 - `GET /api/diagnostics/futex`: diagnóstico de leitura do site, sem enviar formulários.
 - `POST /api/test-requests`: inicia uma sessão manual com `{ "manualChat": true }`.
-- `GET /api/test-requests/:id`: retorna a conversa atual e o status.
-- `POST /api/test-requests/:id/chat`: encaminha uma mensagem ou opção escolhida pelo usuário.
 - `GET /api/test-requests`: lista o histórico persistido.
-- `GET /api/test-requests/:id`: consulta uma solicitação.
 - `POST /api/test-requests/:id/app-confirmation`: recebe `{ "installed": true | false }` e responde imediatamente; o painel acompanha o processamento por polling.
 
 Todas as rotas `/api` exigem `Authorization: Bearer <API_TOKEN>` em produção. A rota pública `/health` retorna apenas que o processo está vivo; os detalhes operacionais ficam em `/api/health`.

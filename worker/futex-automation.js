@@ -252,7 +252,6 @@ export async function inspectFutexPage() {
                 className: root.host.getAttribute("class"),
                 id: root.host.id || undefined,
               } : undefined,
-              rootText: node.tagName === "TEXTAREA" ? (root.textContent || "").trim().slice(0, 8_000) : undefined,
               chatMessages: node.tagName === "TEXTAREA" && isShadowRoot
                 ? Array.from(root.querySelectorAll(".messages .msg, .messages .system, .messages .options .chip, .messages .cta"))
                     .map((message) => (message.innerText || message.textContent || "").trim())
@@ -262,7 +261,6 @@ export async function inspectFutexPage() {
               messageContainerText: node.tagName === "TEXTAREA" && isShadowRoot
                 ? (root.querySelector(".messages")?.innerText || "").trim().slice(0, 8_000)
                 : undefined,
-              rootHtml: node.tagName === "TEXTAREA" && isShadowRoot ? root.innerHTML.slice(-12_000) : undefined,
             };
           })),
         frame.locator("body").evaluate((body) => {

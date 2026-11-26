@@ -44,7 +44,7 @@ O Vite encaminha `/api/worker/*` para `http://127.0.0.1:8787`. O worker aceita c
 
 ## Verificar a página FUTEX
 
-Com o worker iniciado, abra o IPTV Flow e vá a **Configurações → Diagnosticar FUTEX**. O diagnóstico abre a página e, se houver um botão inicial conhecido, abre apenas o início do chatbot — sem preencher dados de cliente nem confirmar a geração de teste — e retorna:
+Com o worker iniciado, abra o IPTV Flow e vá a **Configurações → Diagnosticar FUTEX**. O diagnóstico abre a página pública e apenas lê o conteúdo inicial, sem clicar em botões, preencher dados de cliente ou iniciar um atendimento. Ele retorna:
 - título e URL carregada;
 - frames/iframes encontrados;
 - textos visíveis;
@@ -57,10 +57,11 @@ Use o resultado para validar os seletores antes de habilitar a automação. A p�
 | Variável | Obrigatória | Descrição |
 |---|---:|---|
 | `PORT` | Não | Porta HTTP, padrão 8787 |
-| `NODE_ENV` | Produção | Em produção, exige API_TOKEN |
+| `NODE_ENV` | Produção | Em produção, exige `API_TOKEN` e `DATA_ENCRYPTION_KEY` |
 | `DATA_DIR` | Recomendado | Diretório persistente para `jobs.json`; use `/data` com volume |
 | `DATA_ENCRYPTION_KEY` | Sim em produção | Chave hexadecimal de 64 caracteres para criptografar nome, telefone e credenciais com AES-256-GCM |
 | `API_TOKEN` | Sim em produção | Token aleatório com pelo menos 32 caracteres para autenticar a API |
+| `ALLOWED_ORIGINS` | Não | Origens permitidas pelo CORS; o proxy Vercel usa chamadas server-to-server |
 | `FUTEX_URL` | Não | Página pública de teste |
 | `FUTEX_AUTOMATION_ENABLED` | Sim para gerar | Começa como false; habilite somente depois da validação |
 | `FUTEX_HEADLESS` | Não | true para Chromium sem janela |
@@ -93,8 +94,7 @@ Todas as rotas `/api` exigem `Authorization: Bearer <API_TOKEN>` em produção. 
    - `PORT=8787`
    - `DATA_DIR=/data`
    - `DATA_ENCRYPTION_KEY=<chave hexadecimal de 64 caracteres>`
-   - `API_TOKEN=<token aleatório longo>`
-   - `DATA_ENCRYPTION_KEY=<64 caracteres hexadecimais gerados separadamente>`
+   - `API_TOKEN=<token aleatório com pelo menos 32 caracteres>`
    - `FUTEX_URL=https://futex.com.br/teste/`
    - `FUTEX_AUTOMATION_ENABLED=false` até concluir a validação
    - `FUTEX_HEADLESS=true`

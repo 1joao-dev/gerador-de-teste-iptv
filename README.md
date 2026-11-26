@@ -5,7 +5,7 @@ Painel web mobile-first para organizar solicitações de testes IPTV e acompanha
 ## O que existe nesta versão
 
 - Dashboard com indicadores calculados a partir dos registros locais.
-- Formulário de solicitação com seleção de dispositivo, marca e aplicativo.
+- Formulário com os quatro campos do fluxo FUTEX: nome, celular, tipo de dispositivo e marca.
 - Histórico local com busca e detalhes.
 - Configurações com estado explícito da integração.
 - Layout responsivo para desktop e celular.
@@ -13,7 +13,7 @@ Painel web mobile-first para organizar solicitações de testes IPTV e acompanha
 
 ## Importante: estado atual da integração
 
-A interface está funcional para navegação, seleção de opções, criação de rascunhos locais, pesquisa e visualização de registros. **Sem um backend configurado, o botão salva apenas um rascunho no navegador; nenhum teste é solicitado ou gerado.**
+A interface está funcional para navegação, preenchimento dos quatro campos do formulário (nome, celular, tipo de dispositivo e marca), criação de rascunhos locais, pesquisa e visualização de registros. **Sem um backend configurado, o botão salva apenas um rascunho no navegador; nenhum teste é solicitado ou gerado.**
 
 A integração real deve ser feita por um backend/worker separado. O frontend envia:
 
@@ -27,11 +27,9 @@ Exemplo de corpo:
 ```json
 {
   "customerName": "Cliente 01",
-  "contact": "",
+  "contact": "(11) 99999-9999",
   "device": "Smart TV",
-  "brand": "Samsung",
-  "app": "IPTV Smarters Pro",
-  "notes": ""
+  "brand": "Samsung"
 }
 ```
 

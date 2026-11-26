@@ -283,7 +283,14 @@ export async function startFutexSession(payload) {
     }
 
     session.scope = scope;
-    const result = await waitForAppStep(scope);
+    let result = await waitForAppStep(scope);
+
+    // Modo automático: avança no chatbot sem abrir a FUTEX no aparelho do usuário.
+    // Só responde "Sim" quando o usuário habilitou essa opção no próprio IPTV Flow.
+    if (result.status === "awaiting_app" && payload.autoConfirmInstall === true) {
+      result = await continueFutexSession(session, true);
+    }
+
     if (result.status === "completed") {
       await closeFutexSession(session);
       return { result };
@@ -310,12 +317,12 @@ export async function continueFutexSession(session, installed) {
       }
       return {
         status: "needs_human",
-        message: "A FUTEX respondeu, mas o formato dos dados não foi reconhecido. Confira o atendimento diretamente no site.",
+        message: "A FUTEX respondeu, mas o formato dos dados não foi reconhecido. O atendimento foi interrompido com segurança; consulte o diagnóstico no IPTV Flow.",
       };
     } catch {
       return {
         status: "needs_human",
-        message: "A FUTEX não retornou os dados no tempo esperado. Confira o atendimento diretamente no site.",
+        message: "A FUTEX não retornou os dados no tempo esperado. O atendimento foi interrompido com segurança; tente novamente mais tarde.",
       };
     }
   }

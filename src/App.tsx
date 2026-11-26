@@ -40,6 +40,7 @@ type Page = "overview" | "new" | "history" | "settings";
 type RequestStatus = "draft" | "queued" | "running" | "awaiting_app" | "needs_human" | "completed" | "failed";
 
 type AccessDetail = { label: string; value: string };
+type FutexChatMessage = { id: string; role: "user" | "assistant"; text: string };
 
 type TestRequest = {
   id: string;
@@ -59,11 +60,15 @@ type TestRequest = {
   appGuideUrl?: string;
   appInstalled?: boolean;
   autoConfirmInstall?: boolean;
+  manualChat?: boolean;
+  chatMessages?: FutexChatMessage[];
+  chatOptions?: string[];
+  chatInputPlaceholder?: string;
+  chatCanSend?: boolean;
   message?: string;
 };
 
 const APP_ACCESS_CODE_STORAGE_KEY = "iptv-flow-app-access-code-v1";
-const AUTO_CONFIRM_INSTALL_STORAGE_KEY = "iptv-flow-auto-confirm-install-v1";
 
 const devices = [
   { label: "Smart TV", detail: "Televisores inteligentes", icon: Tv },
@@ -158,12 +163,13 @@ function App() {
   const [workerHealth, setWorkerHealth] = useState<"checking" | "online" | "offline">("checking");
   const [appAccessCode, setAppAccessCode] = useState("");
   const [appAccessCodeDraft, setAppAccessCodeDraft] = useState("");
-  const [autoConfirmInstall, setAutoConfirmInstall] = useState(false);
+  const [chatDraft, setChatDraft] = useState("");
+  const [sendingChat, setSendingChat] = useState(false);
   const [workerAutomationEnabled, setWorkerAutomationEnabled] = useState(false);
   const [diagnosingFutex, setDiagnosingFutex] = useState(false);
   const [futexDiagnostic, setFutexDiagnostic] = useState("");
   const [flowRequest, setFlowRequest] = useState<TestRequest | null>(null);
-  const [flowStage, setFlowStage] = useState<"form" | "install" | "waiting" | "result">("form");
+  const [flowStage, setFlowStage] = useState<"form" | "chat" | "install" | "waiting" | "result">("form");
   const [brandOther, setBrandOther] = useState("");
   const [form, setForm] = useState({
     customerName: "",
@@ -177,7 +183,6 @@ function App() {
       const savedAccessCode = localStorage.getItem(APP_ACCESS_CODE_STORAGE_KEY) ?? "";
       setAppAccessCode(savedAccessCode);
       setAppAccessCodeDraft(savedAccessCode);
-      setAutoConfirmInstall(localStorage.getItem(AUTO_CONFIRM_INSTALL_STORAGE_KEY) === "true");
     } catch {
       setAppAccessCode("");
       setAppAccessCodeDraft("");
@@ -256,14 +261,6 @@ function App() {
     setWorkerHealth("checking");
   }
 
-  function updateAutoConfirmInstall(enabled: boolean) {
-    setAutoConfirmInstall(enabled);
-    try {
-      localStorage.setItem(AUTO_CONFIRM_INSTALL_STORAGE_KEY, enabled ? "true" : "false");
-    } catch {
-      setToast("Não foi possível salvar essa preferência neste navegador.");
-    }
-  }
 
   async function runFutexDiagnostic() {
     setDiagnosingFutex(true);
@@ -285,82 +282,75 @@ function App() {
     setForm((current) => ({ ...current, [field]: value }));
   }
 
-  async function submitRequest(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const phoneDigits = form.contact.replace(/\D/g, "");
-    const selectedBrand = form.brand === "Outra (digitar)" ? brandOther.trim() : form.brand;
+  async function submitRequest(event?: FormEvent<HTMLFormElement>) {
+    event?.preventDefault();
     if (!automationReady) {
       setToast(workerHealth === "offline" ? "Worker offline. Verifique o servidor de automação." : "A automação ainda não está ativa no servidor.");
       return;
     }
-    if (!form.customerName.trim() || phoneDigits.length < 10 || !form.device || !selectedBrand) {
-      setToast("Preencha nome, celular, onde vai assistir e marca.");
+    if (!API_BASE_URL) {
+      setToast("Configure a conexão com o worker para abrir o atendimento.");
       return;
     }
 
     setSubmitting(true);
-    const payload = {
-      customerName: form.customerName.trim(),
-      contact: form.contact.trim(),
-      device: form.device,
-      brand: selectedBrand,
-      autoConfirmInstall,
-    };
-
-    if (API_BASE_URL) {
-      try {
-        const response = await apiRequest("/api/test-requests", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        });
-        const result = await response.json().catch(() => ({}));
-        if (!response.ok) {
-          throw new Error(result.message || "O servidor não conseguiu iniciar o atendimento.");
-        }
-        const request: TestRequest = {
-          id: result.id ?? makeId(),
-          ...payload,
-          status: result.status ?? (Array.isArray(result.accessDetails) && result.accessDetails.length > 0 || result.username || result.password || result.code ? "completed" : result.recommendedApp ? "awaiting_app" : "queued"),
-          createdAt: result.createdAt ?? new Date().toISOString(),
-          username: result.username,
-          password: result.password,
-          code: result.code,
-          duration: result.duration,
-          resultTitle: result.resultTitle,
-          accessDetails: result.accessDetails,
-          recommendedApp: result.recommendedApp,
-          appGuideUrl: result.appGuideUrl,
-          appInstalled: result.appInstalled,
-          message: result.message,
-        };
-        setRequests((current) => [request, ...current]);
-        setFlowRequest(request);
-        setFlowStage(hasTestResult(request) ? "result" : request.recommendedApp ? "install" : "waiting");
-        setToast(request.recommendedApp ? "Aplicativo recomendado recebido." : "Solicitação enviada para a automação.");
-        setForm({ customerName: "", contact: "", device: "", brand: "" });
-        setBrandOther("");
-      } catch (error) {
-        setToast(error instanceof Error ? error.message : "Falha ao iniciar a solicitação.");
-      } finally {
-        setSubmitting(false);
-      }
-      return;
+    try {
+      const response = await apiRequest("/api/test-requests", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ manualChat: true }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.message || "Não foi possível abrir o atendimento FUTEX.");
+      const request: TestRequest = {
+        id: result.id ?? makeId(),
+        customerName: result.customerName || "Atendimento FUTEX",
+        contact: result.contact || "",
+        device: result.device || "A definir no atendimento",
+        brand: result.brand || "A definir no atendimento",
+        manualChat: true,
+        status: result.status || "queued",
+        createdAt: result.createdAt || new Date().toISOString(),
+        chatMessages: result.chatMessages || [],
+        chatOptions: result.chatOptions || [],
+        chatInputPlaceholder: result.chatInputPlaceholder || "Digite sua resposta...",
+        message: result.message || "Abrindo o atendimento FUTEX.",
+      };
+      setRequests((current) => [request, ...current]);
+      setFlowRequest(request);
+      setChatDraft("");
+      setFlowStage("chat");
+      setToast("Atendimento aberto. Você pode conversar com a FUTEX aqui no app.");
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : "Falha ao abrir o atendimento.");
+    } finally {
+      setSubmitting(false);
     }
+  }
 
-    const draft: TestRequest = {
-      id: makeId(),
-      ...payload,
-      status: "draft",
-      createdAt: new Date().toISOString(),
-      message: "Rascunho local. Nenhum teste foi solicitado ou gerado porque o backend ainda não está conectado.",
-    };
-    setRequests((current) => [draft, ...current]);
-    setSubmitting(false);
-    setToast("Rascunho salvo neste navegador. Nenhum teste foi gerado.");
-    setForm({ customerName: "", contact: "", device: "", brand: "" });
-    setBrandOther("");
-    setPage("history");
+  async function sendChatReply(message = chatDraft, option?: string) {
+    if (!flowRequest || !flowRequest.manualChat || sendingChat) return;
+    const text = message.trim();
+    if (!option && !text) return;
+    setSendingChat(true);
+    try {
+      const response = await apiRequest("/api/test-requests/" + encodeURIComponent(flowRequest.id) + "/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(option ? { option } : { message: text }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.message || "Não foi possível enviar sua resposta.");
+      const updated: TestRequest = { ...flowRequest, ...result, manualChat: true };
+      setFlowRequest(updated);
+      setRequests((current) => current.map((item) => item.id === updated.id ? updated : item));
+      setChatDraft("");
+      setFlowStage("chat");
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : "Falha ao enviar resposta.");
+    } finally {
+      setSendingChat(false);
+    }
   }
 
   async function confirmAppInstalled(installed: boolean) {
@@ -417,6 +407,7 @@ function App() {
       setFlowRequest(updated);
       setRequests((current) => current.map((item) => item.id === updated.id ? updated : item));
       if (hasTestResult(updated)) setFlowStage("result");
+      else if (updated.manualChat) setFlowStage("chat");
       else if (updated.status === "awaiting_app" && updated.recommendedApp && updated.appInstalled !== true) setFlowStage("install");
       else setFlowStage("waiting");
       if (!silent) setToast("Status atualizado.");
@@ -428,8 +419,8 @@ function App() {
   }
 
   useEffect(() => {
-    if (!API_BASE_URL || !flowRequest || !["waiting", "install"].includes(flowStage) || !["queued", "running", "awaiting_app"].includes(flowRequest.status)) return;
-    const interval = window.setInterval(() => { void refreshFlowRequest(true); }, 5_000);
+    if (!API_BASE_URL || !flowRequest || !["chat", "waiting", "install"].includes(flowStage) || !["queued", "running", "awaiting_app"].includes(flowRequest.status)) return;
+    const interval = window.setInterval(() => { void refreshFlowRequest(true); }, flowStage === "chat" ? 2_500 : 5_000);
     return () => window.clearInterval(interval);
   }, [flowRequest?.id, flowRequest?.status, flowStage]);
 
@@ -465,7 +456,7 @@ function App() {
 
   function resumeRequest(request: TestRequest) {
     setFlowRequest(request);
-    setFlowStage(hasTestResult(request) ? "result" : request.status === "awaiting_app" ? "install" : "waiting");
+    setFlowStage(hasTestResult(request) ? "result" : request.manualChat ? "chat" : request.status === "awaiting_app" ? "install" : "waiting");
     setSelectedRequest(null);
     setPage("new");
   }

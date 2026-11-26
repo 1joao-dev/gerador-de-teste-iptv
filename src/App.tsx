@@ -380,7 +380,7 @@ function App() {
 
   useEffect(() => {
     if (!API_BASE_URL || !flowRequest || !["chat", "waiting", "install"].includes(flowStage) || !["queued", "running", "awaiting_app"].includes(flowRequest.status)) return;
-    const interval = window.setInterval(() => { void refreshFlowRequest(true); }, flowStage === "chat" ? 2_500 : 5_000);
+    const interval = window.setInterval(() => { void refreshFlowRequest(true); }, flowStage === "chat" ? 4_000 : 5_000);
     return () => window.clearInterval(interval);
   }, [flowRequest?.id, flowRequest?.status, flowStage]);
 
@@ -602,7 +602,7 @@ function App() {
                   <section className="panel flow-state-panel">
                     {flowStage === "chat" && flowRequest && (
                       <section className="futex-chat-shell">
-                        <div className="futex-chat-topline"><span><i className="green-dot" /> Atendimento conectado</span><button className="text-button" type="button" onClick={() => void refreshFlowRequest()} disabled={refreshingFlow}>{refreshingFlow ? <LoaderCircle size={13} className="spin" /> : <RefreshCw size={13} />} Atualizar</button></div>
+                        <div className="futex-chat-topline"><span><i className="green-dot" /> {flowRequest.status === "queued" ? "Conectando à FUTEX" : "Atendimento conectado"}</span><button className="text-button" type="button" onClick={() => void refreshFlowRequest()} disabled={refreshingFlow}>{refreshingFlow ? <LoaderCircle size={13} className="spin" /> : <RefreshCw size={13} />} Atualizar</button></div>
                         <div className="futex-chat-messages" role="log" aria-live="polite">
                           {(flowRequest.chatMessages || []).map((message, index) => (
                             <div className={"futex-chat-message " + (message.role === "user" ? "from-user" : "from-bot")} key={message.id || index}>

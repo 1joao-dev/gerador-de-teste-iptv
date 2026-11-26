@@ -393,7 +393,7 @@ export async function readFutexConversation(session) {
         role: /\buser\b/i.test(className) ? "user" : "assistant",
         text,
       };
-    }).filter((item) => item.text && !/^\d{1,2}:\d{2}\s*1×?$/i.test(item.text));
+    }).filter((item) => item.text && !/^\d{1,2}:\d{2}\s*1×?$/i.test(item.text)).slice(-80);
 
     const options = Array.from(root.querySelectorAll(".messages .options .chip, .messages .cta"))
       .map((item) => (item.innerText || item.textContent || "").trim())
@@ -407,7 +407,7 @@ export async function readFutexConversation(session) {
       chatOptions: options,
       chatInputPlaceholder: node.getAttribute("placeholder") || "Digite sua resposta...",
       chatCanSend: !root.querySelector('button[aria-label="Enviar mensagem"]')?.disabled,
-      result: transcript ? undefined : undefined,
+      chatBotCount: root.querySelectorAll(".messages .msg.bot").length,
     };
   }).then((chat) => {
     const transcript = chat.chatMessages.map((item) => item.text).join("\n");
@@ -426,7 +426,7 @@ async function waitForFutexBotReply(session, previousBotCount, timeout = 45_000)
       reject(new Error("A conversa da FUTEX não está disponível."));
       return;
     }
-    const countBotMessages = () => root.querySelectorAll(".messages .msg.bot, .messages .system").length;
+    const countBotMessages = () => root.querySelectorAll(".messages .msg.bot").length;
     if (countBotMessages() > previousCount) {
       resolve(true);
       return;
@@ -468,7 +468,7 @@ export async function sendFutexChatMessage(session, message) {
   const scope = session.scope || session.page;
   const input = scope.locator('textarea[aria-label="Mensagem"], textarea').last();
   const before = await readFutexConversation(session);
-  const previousBotCount = before.chatMessages.filter((item) => item.role === "assistant").length;
+  const previousBotCount = before.chatBotCount;
   await input.fill(text);
   const sendButton = scope.locator('button[aria-label="Enviar mensagem"]').last();
   if (await sendButton.isVisible().catch(() => false) && await sendButton.isEnabled().catch(() => false)) {
@@ -485,7 +485,7 @@ export async function clickFutexChatOption(session, option) {
   if (!label || label.length > 200) throw new Error("Selecione uma opção válida.");
   const scope = session.scope || session.page;
   const before = await readFutexConversation(session);
-  const previousBotCount = before.chatMessages.filter((item) => item.role === "assistant").length;
+  const previousBotCount = before.chatBotCount;
   const choices = scope.locator(".messages .options .chip, .messages .cta");
   let matched;
   for (let index = await choices.count() - 1; index >= 0; index -= 1) {

@@ -205,14 +205,26 @@ export async function inspectFutexPage() {
             const rect = node.getBoundingClientRect();
             const style = window.getComputedStyle(node);
             return rect.width > 0 && rect.height > 0 && style.visibility !== "hidden" && style.display !== "none";
-          }).slice(0, 40).map((node) => ({
-            tag: node.tagName.toLowerCase(),
-            type: node.getAttribute("type"),
-            role: node.getAttribute("role"),
-            placeholder: node.getAttribute("placeholder"),
-            ariaLabel: node.getAttribute("aria-label"),
-            text: (node.innerText || node.textContent || "").trim().slice(0, 100),
-          }))),
+          }).slice(0, 40).map((node) => {
+            const root = node.getRootNode();
+            const isShadowRoot = typeof ShadowRoot !== "undefined" && root instanceof ShadowRoot;
+            return {
+              tag: node.tagName.toLowerCase(),
+              type: node.getAttribute("type"),
+              role: node.getAttribute("role"),
+              placeholder: node.getAttribute("placeholder"),
+              ariaLabel: node.getAttribute("aria-label"),
+              text: (node.innerText || node.textContent || "").trim().slice(0, 100),
+              rootType: isShadowRoot ? "shadow" : "document",
+              rootHost: isShadowRoot ? {
+                tag: root.host.tagName.toLowerCase(),
+                className: root.host.getAttribute("class"),
+                id: root.host.id || undefined,
+              } : undefined,
+              rootText: node.tagName === "TEXTAREA" ? (root.textContent || "").trim().slice(0, 8_000) : undefined,
+              rootHtml: node.tagName === "TEXTAREA" && isShadowRoot ? root.innerHTML.slice(0, 16_000) : undefined,
+            };
+          }),
         frame.locator("body").evaluate((body) => {
           const candidates = [];
           const visit = (root, depth = 0) => {

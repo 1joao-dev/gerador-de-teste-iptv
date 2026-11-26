@@ -19,7 +19,7 @@ O formato de credenciais não é fixo: o parser suporta rótulos dinâmicos como
 - **Painel:** Vercel (Vite + React).
 - **Proxy:** Vercel Function em `api/worker/[...path].js`.
 - **Automação:** Playwright em um servidor persistente, recomendado Railway com Docker.
-- **Histórico:** arquivo JSON em volume persistente do worker (`DATA_DIR=/data`).
+- **Histórico:** arquivo JSON em volume persistente do worker (`DATA_DIR=/data`), com nome, telefone e credenciais criptografados com AES-256-GCM.
 
 Não execute Chromium em uma função serverless da Vercel. A Vercel hospeda o painel e o proxy; o worker precisa permanecer ativo para manter a sessão do navegador entre a indicação do aplicativo e a confirmação do usuário.
 
@@ -55,7 +55,7 @@ MAX_ACTIVE_SESSIONS=1
 MAX_SESSION_MINUTES=30
 ```
 
-Gere duas chaves independentes com `openssl rand -hex 32`: uma para `API_TOKEN` (use o mesmo valor em `WORKER_API_TOKEN` na Vercel) e outra para `DATA_ENCRYPTION_KEY`. Esta segunda chave criptografa nome, telefone e credenciais no histórico persistido. Guarde-a com segurança e nunca a troque enquanto houver dados salvos. Mantenha `FUTEX_AUTOMATION_ENABLED=false` até executar o diagnóstico e validar o fluxo real.
+Gere duas chaves independentes com `openssl rand -hex 32`: uma para `API_TOKEN` (use o mesmo valor em `WORKER_API_TOKEN` na Vercel) e outra para `DATA_ENCRYPTION_KEY`. No Windows PowerShell, use `[Convert]::ToHexString([Security.Cryptography.RandomNumberGenerator]::GetBytes(32))` para cada chave. Esta segunda chave criptografa nome, telefone e credenciais no histórico persistido. Guarde-a com segurança e nunca a troque enquanto houver dados salvos. Mantenha `FUTEX_AUTOMATION_ENABLED=false` até executar o diagnóstico e validar o fluxo real.
 
 ## Desenvolvimento local
 

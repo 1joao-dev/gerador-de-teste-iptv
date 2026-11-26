@@ -17,6 +17,7 @@ try {
       url: frame.url,
       visibleText: frame.visibleText,
       controls: frame.controls,
+      dom: frame.dom,
     })),
   };
   await fs.writeFile(outputPath, JSON.stringify(summary, null, 2), "utf8");
@@ -31,6 +32,7 @@ try {
       url: frame.url,
       visibleText: frame.visibleText.slice(0, 1800),
       controls: frame.controls,
+      dom: frame.dom,
     })),
   }));
 } catch (error) {

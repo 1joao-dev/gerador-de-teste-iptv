@@ -60,7 +60,7 @@ Use o resultado para validar os seletores antes de habilitar a automação. A p�
 | `NODE_ENV` | Produção | Em produção, exige API_TOKEN |
 | `DATA_DIR` | Recomendado | Diretório persistente para `jobs.json`; use `/data` com volume |
 | `DATA_ENCRYPTION_KEY` | Sim em produção | Chave hexadecimal de 64 caracteres para criptografar nome, telefone e credenciais com AES-256-GCM |
-| `API_TOKEN` | Sim em produção | Chave longa e aleatória para autenticar a API |
+| `API_TOKEN` | Sim em produção | Token aleatório com pelo menos 32 caracteres para autenticar a API |
 | `FUTEX_URL` | Não | Página pública de teste |
 | `FUTEX_AUTOMATION_ENABLED` | Sim para gerar | Começa como false; habilite somente depois da validação |
 | `FUTEX_HEADLESS` | Não | true para Chromium sem janela |
@@ -68,7 +68,7 @@ Use o resultado para validar os seletores antes de habilitar a automação. A p�
 | `MAX_ACTIVE_SESSIONS` | Não | Sessões simultâneas, padrão 1 |
 | `MAX_SESSION_MINUTES` | Não | Tempo máximo aguardando confirmação, padrão 30 |
 
-Gere duas chaves independentes com `openssl rand -hex 32`: uma para `API_TOKEN` (use o mesmo valor em `WORKER_API_TOKEN` na Vercel) e outra para `DATA_ENCRYPTION_KEY`. A chave de criptografia protege nome, telefone e credenciais no arquivo `jobs.json`. Guarde-a com segurança e nunca a troque enquanto houver dados salvos. Na Vercel, defina também `APP_ACCESS_CODE` com um código privado que você informará uma vez em Configurações no painel.
+Gere duas chaves independentes com `openssl rand -hex 32`: uma para `API_TOKEN` (use o mesmo valor em `WORKER_API_TOKEN` na Vercel) e outra para `DATA_ENCRYPTION_KEY`. A chave de criptografia protege nome, telefone e credenciais no arquivo `jobs.json`. Guarde-a com segurança e nunca a troque enquanto houver dados salvos. Na Vercel, gere `APP_ACCESS_CODE` com `openssl rand -hex 16` e informe esse código uma vez em Configurações no painel.
 
 ## Endpoints
 

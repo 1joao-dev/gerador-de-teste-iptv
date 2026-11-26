@@ -67,7 +67,7 @@ Use o resultado para validar os seletores antes de habilitar a automação. A p�
 | `MAX_ACTIVE_SESSIONS` | Não | Sessões simultâneas, padrão 1 |
 | `MAX_SESSION_MINUTES` | Não | Tempo máximo aguardando confirmação, padrão 30 |
 
-Gere o token com `openssl rand -hex 32`. Use o mesmo valor em `API_TOKEN` no worker e `WORKER_API_TOKEN` na Vercel.
+Gere o token com `openssl rand -hex 32`. Use o mesmo valor em `API_TOKEN` no worker e `WORKER_API_TOKEN` na Vercel. Na Vercel, defina também `APP_ACCESS_CODE` com um código privado que você informará uma vez em Configurações no painel.
 
 ## Endpoints
 
@@ -109,9 +109,10 @@ Use somente uma réplica do worker nesta versão, pois as sessões do Chromium f
 3. Em **Environment Variables**, configure:
    - `WORKER_API_URL=https://SEU-WORKER.up.railway.app`
    - `WORKER_API_TOKEN=<o mesmo token de API_TOKEN>`
+   - `APP_ACCESS_CODE=<código privado para abrir o painel>`
 4. Faça o deploy.
 
-A pasta `api/worker/[...path].js` é um proxy server-side. O navegador chama o mesmo domínio da Vercel e nunca recebe o token do worker. Não crie variáveis `VITE_*` com chaves secretas.
+A pasta `api/worker/[...path].js` é um proxy server-side. O navegador chama o mesmo domínio da Vercel e nunca recebe o token do worker. O painel pede o `APP_ACCESS_CODE`, que funciona como proteção simples para uso administrativo privado. Não crie variáveis `VITE_*` com chaves secretas.
 
 ## Testes e limites conhecidos
 

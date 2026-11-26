@@ -16,7 +16,7 @@ A automação não tenta resolver CAPTCHA, contornar bloqueios, autenticação, 
 
 ## Rodar localmente
 
-Requisitos: Node.js 20+.
+Requisitos: Node.js 22+.
 
 No primeiro terminal:
 

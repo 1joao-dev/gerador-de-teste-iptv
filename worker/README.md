@@ -120,6 +120,8 @@ A pasta `api/worker/[...path].js` é um proxy server-side. O navegador chama o m
 ```bash
 npm test
 npm run check
+cd ..
+node --test tests/proxy.test.js
 ```
 
 Os testes automatizados cobrem a extração de campos com formatos diferentes. Eles não substituem uma execução real no site. A FUTEX pode alterar textos, botões, frames ou o formato das mensagens; use o diagnóstico e valide o atendimento antes de ativar o processamento real.

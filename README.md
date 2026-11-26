@@ -33,7 +33,7 @@ WORKER_API_TOKEN=mesmo-token-configurado-no-worker
 APP_ACCESS_CODE=chave-aleatoria-de-pelo-menos-32-caracteres
 ```
 
-Gere `APP_ACCESS_CODE` com `openssl rand -hex 16` e mantenha-o privado. Não use prefixo `VITE_` nessas variáveis. O proxy lê os segredos no servidor e os injeta somente na chamada privada ao worker. O painel solicita o `APP_ACCESS_CODE` em Configurações antes de consultar o backend. Não compartilhe esse código.
+Gere `APP_ACCESS_CODE` com `openssl rand -hex 16` e mantenha-o privado. Não use prefixo `VITE_` nessas variáveis. O proxy lê os segredos no servidor e os injeta somente na chamada privada ao worker. O histórico de clientes e credenciais é carregado do servidor e não é salvo no armazenamento local do navegador. O painel solicita o `APP_ACCESS_CODE` em Configurações antes de consultar o backend. Não compartilhe esse código.
 
 ## Configuração do worker
 

@@ -27,7 +27,7 @@ npx playwright install --with-deps chromium
 cp .env.example .env
 ```
 
-No arquivo `.env`, mantenha `NODE_ENV=development`, `API_TOKEN=` vazio e `FUTEX_AUTOMATION_ENABLED=false` durante a configuração inicial. Depois:
+No arquivo `.env`, mantenha `NODE_ENV=development`, `API_TOKEN=` vazio, `DATA_ENCRYPTION_KEY=` vazio e `FUTEX_AUTOMATION_ENABLED=false` durante a configuração inicial. Depois:
 
 ```bash
 npm run dev

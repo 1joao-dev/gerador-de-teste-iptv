@@ -197,7 +197,7 @@ function App() {
 
   const stats = useMemo(() => ({
     total: requests.length,
-    queued: requests.filter((item) => item.status === "queued" || item.status === "draft" || item.status === "awaiting_app" || item.status === "needs_human").length,
+    queued: requests.filter((item) => item.status === "queued" || item.status === "running" || item.status === "draft" || item.status === "awaiting_app").length,
     completed: requests.filter((item) => item.status === "completed").length,
     failed: requests.filter((item) => item.status === "failed").length,
   }), [requests]);
@@ -393,7 +393,7 @@ function App() {
       setFlowRequest(updated);
       setRequests((current) => current.map((item) => item.id === updated.id ? updated : item));
       if (hasTestResult(updated)) setFlowStage("result");
-      else if (updated.recommendedApp && updated.appInstalled !== true) setFlowStage("install");
+      else if (updated.status === "awaiting_app" && updated.recommendedApp && updated.appInstalled !== true) setFlowStage("install");
       else setFlowStage("waiting");
       if (!silent) setToast("Status atualizado.");
     } catch (error) {

@@ -7,6 +7,7 @@ import express from "express";
 import cors from "cors";
 import helmet from "helmet";
 import { rateLimit } from "express-rate-limit";
+import { createDataEncryptionKey, protectJobForStorage, restoreJobFromStorage } from "./secure-storage.js";
 import {
   closeFutexBrowser,
   closeFutexSession,
@@ -16,6 +17,7 @@ import {
 } from "./futex-automation.js";
 
 const app = express();
+const dataEncryptionKey = createDataEncryptionKey(process.env.DATA_ENCRYPTION_KEY, process.env.NODE_ENV === "production");
 const port = Number(process.env.PORT || 8787);
 const dataDirectory = path.resolve(process.env.DATA_DIR || path.join(path.dirname(fileURLToPath(import.meta.url)), "data"));
 const jobsFile = path.join(dataDirectory, "jobs.json");
@@ -40,13 +42,16 @@ if (process.env.NODE_ENV === "production" && !apiToken) {
 
 function safeJob(job) {
   if (!job) return job;
-  const { internalError, ...publicJob } = job;
+  const { internalError, privateDataEncrypted, ...publicJob } = job;
   return publicJob;
 }
 
 function persistJobs() {
   const snapshot = JSON.stringify(
-    [...jobs.values()].map(({ internalError, ...job }) => job),
+    [...jobs.values()].map((job) => {
+      const { internalError, ...publicFields } = job;
+      return protectJobForStorage(publicFields, dataEncryptionKey);
+    }),
     null,
     2,
   );
@@ -72,15 +77,28 @@ async function loadJobs() {
 
     for (const item of stored) {
       if (!item || typeof item.id !== "string") continue;
-      const interrupted = ["queued", "running", "awaiting_app"].includes(item.status);
+
+      let restored;
+      try {
+        restored = restoreJobFromStorage(item, dataEncryptionKey);
+      } catch {
+        restored = {
+          ...item,
+          status: "needs_human",
+          message: "Os dados privados deste registro não puderam ser descriptografados. Confira se DATA_ENCRYPTION_KEY é a chave original.",
+          updatedAt: new Date().toISOString(),
+        };
+      }
+
+      const interrupted = ["queued", "running", "awaiting_app"].includes(restored.status);
       jobs.set(item.id, interrupted
         ? {
-            ...item,
+            ...restored,
             status: "needs_human",
             message: "O worker foi reiniciado e a sessão do navegador não pode ser retomada. Inicie uma nova solicitação.",
             updatedAt: new Date().toISOString(),
           }
-        : item);
+        : restored);
     }
     if (jobs.size) await persistJobs();
   } catch (error) {

@@ -5,7 +5,7 @@ Painel web mobile-first para organizar solicitações de testes IPTV e acompanha
 ## O que existe nesta versão
 
 - Dashboard com indicadores calculados a partir dos registros locais.
-- Formulário com os quatro campos do fluxo FUTEX: nome, celular, tipo de dispositivo e marca.
+- Fluxo baseado nas etapas observadas na FUTEX: nome, WhatsApp, onde vai assistir, marca, confirmação de instalação do aplicativo recomendado e exibição das credenciais.
 - Histórico local com busca e detalhes.
 - Configurações com estado explícito da integração.
 - Layout responsivo para desktop e celular.
@@ -13,7 +13,7 @@ Painel web mobile-first para organizar solicitações de testes IPTV e acompanha
 
 ## Importante: estado atual da integração
 
-A interface está funcional para navegação, preenchimento dos quatro campos do formulário (nome, celular, tipo de dispositivo e marca), criação de rascunhos locais, pesquisa e visualização de registros. **Sem um backend configurado, o botão salva apenas um rascunho no navegador; nenhum teste é solicitado ou gerado.**
+A interface está funcional para navegação, seleção das opções de dispositivo e marca observadas nas capturas, criação de rascunhos locais, pesquisa, confirmação de instalação do aplicativo recomendado (quando a API retornar essa etapa) e apresentação das credenciais retornadas pelo backend. **Sem backend configurado, o sistema salva apenas um rascunho; não gera credenciais.** **Sem um backend configurado, o botão salva apenas um rascunho no navegador; nenhum teste é solicitado ou gerado.**
 
 A integração real deve ser feita por um backend/worker separado. O frontend envia:
 
@@ -38,12 +38,38 @@ A interface espera um objeto de resposta com pelo menos `id`, `status` e `create
 ```json
 {
   "id": "request-id",
-  "status": "queued",
+  "status": "awaiting_app",
   "createdAt": "2026-11-26T12:00:00.000Z",
-  "username": "retornado-pelo-servico",
-  "password": "retornado-pelo-servico",
-  "code": "opcional",
-  "duration": "opcional"
+  "recommendedApp": "Zuxo Player",
+  "appGuideUrl": "https://endereco-do-tutorial",
+  "message": "Instale o aplicativo indicado e confirme para continuar."
+}
+```
+
+
+Após a pessoa confirmar que conseguiu instalar o aplicativo, o frontend envia:
+
+```http
+POST /api/test-requests/{id}/app-confirmation
+Content-Type: application/json
+```
+
+```json
+{ "installed": true }
+```
+
+Quando a FUTEX concluir o fluxo, o backend deve retornar os dados reais:
+
+```json
+{
+  "id": "request-id",
+  "status": "completed",
+  "recommendedApp": "Zuxo Player",
+  "code": "codigo-retornado-pela-futex",
+  "username": "usuario-retornado-pela-futex",
+  "password": "senha-retornada-pela-futex",
+  "duration": "6 horas",
+  "message": "Teste ativo."
 }
 ```
 
@@ -90,7 +116,7 @@ npm run preview
 
 ## Próximas etapas
 
-1. Definir e implementar o backend real da integração autorizada com a FUTEX.
+1. Implementar o backend/worker que conduz as etapas observadas na página FUTEX e aguarda a confirmação de instalação do aplicativo.
 2. Configurar autenticação administrativa e banco de dados.
 3. Implementar fila, estados de execução, tentativas e logs sem segredos.
 4. Validar o fluxo ponta a ponta antes de liberar a geração real.

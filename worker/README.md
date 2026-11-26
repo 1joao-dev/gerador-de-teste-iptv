@@ -59,6 +59,7 @@ Use o resultado para validar os seletores antes de habilitar a automação. A p�
 | `PORT` | Não | Porta HTTP, padrão 8787 |
 | `NODE_ENV` | Produção | Em produção, exige API_TOKEN |
 | `DATA_DIR` | Recomendado | Diretório persistente para `jobs.json`; use `/data` com volume |
+| `DATA_ENCRYPTION_KEY` | Sim em produção | Chave hexadecimal de 64 caracteres para criptografar nome, telefone e credenciais com AES-256-GCM |
 | `API_TOKEN` | Sim em produção | Chave longa e aleatória para autenticar a API |
 | `FUTEX_URL` | Não | Página pública de teste |
 | `FUTEX_AUTOMATION_ENABLED` | Sim para gerar | Começa como false; habilite somente depois da validação |
@@ -67,7 +68,7 @@ Use o resultado para validar os seletores antes de habilitar a automação. A p�
 | `MAX_ACTIVE_SESSIONS` | Não | Sessões simultâneas, padrão 1 |
 | `MAX_SESSION_MINUTES` | Não | Tempo máximo aguardando confirmação, padrão 30 |
 
-Gere o token com `openssl rand -hex 32`. Use o mesmo valor em `API_TOKEN` no worker e `WORKER_API_TOKEN` na Vercel. Na Vercel, defina também `APP_ACCESS_CODE` com um código privado que você informará uma vez em Configurações no painel.
+Gere duas chaves independentes com `openssl rand -hex 32`: uma para `API_TOKEN` (use o mesmo valor em `WORKER_API_TOKEN` na Vercel) e outra para `DATA_ENCRYPTION_KEY`. A chave de criptografia protege nome, telefone e credenciais no arquivo `jobs.json`. Guarde-a com segurança e nunca a troque enquanto houver dados salvos. Na Vercel, defina também `APP_ACCESS_CODE` com um código privado que você informará uma vez em Configurações no painel.
 
 ## Endpoints
 
@@ -91,6 +92,7 @@ Todas as rotas `/api` exigem `Authorization: Bearer <API_TOKEN>` em produção. 
    - `NODE_ENV=production`
    - `PORT=8787`
    - `DATA_DIR=/data`
+   - `DATA_ENCRYPTION_KEY=<chave hexadecimal de 64 caracteres>`
    - `API_TOKEN=<token aleatório longo>`
    - `FUTEX_URL=https://futex.com.br/teste/`
    - `FUTEX_AUTOMATION_ENABLED=false` até concluir a validação
@@ -126,4 +128,4 @@ node --test tests/proxy.test.js
 
 Os testes automatizados cobrem a extração de campos com formatos diferentes. Eles não substituem uma execução real no site. A FUTEX pode alterar textos, botões, frames ou o formato das mensagens; use o diagnóstico e valide o atendimento antes de ativar o processamento real.
 
-O histórico é persistido em JSON no volume do worker. Para vários administradores, grande volume, auditoria ou múltiplas réplicas, migre o armazenamento para PostgreSQL e implemente autenticação individual. Não compartilhe o token de administrador.
+O histórico é persistido em JSON no volume do worker; nome, telefone e credenciais são criptografados com AES-256-GCM antes da gravação. Registros antigos sem criptografia são migrados automaticamente na próxima persistência. Para vários administradores, grande volume, auditoria ou múltiplas réplicas, migre o armazenamento para PostgreSQL e implemente autenticação individual. Não compartilhe o token de administrador.

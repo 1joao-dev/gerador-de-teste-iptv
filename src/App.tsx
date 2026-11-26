@@ -1,368 +1,457 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import {
-  ArrowRight,
+  ArrowLeft,
+  Bot,
   Check,
-  CheckCircle2,
-  Clock3,
+  CheckCheck,
+  ChevronDown,
+  CircleHelp,
   Copy,
-  Headphones,
-  MonitorPlay,
   MessageCircle,
-  Monitor,
+  Paperclip,
   Play,
+  Send,
   ShieldCheck,
   Smartphone,
-  Sparkles,
   Tv,
+  UserRound,
   Wifi,
-  Zap,
+  X,
 } from "lucide-react";
-import { WHATSAPP_NUMBER } from "./config";
 
-type RequestForm = {
-  name: string;
-  whatsapp: string;
-  device: string;
-  app: string;
-  notes: string;
-  accepted: boolean;
+type Step =
+  | "device"
+  | "brand"
+  | "customBrand"
+  | "app"
+  | "install"
+  | "retry"
+  | "generating"
+  | "error"
+  | "done";
+
+type Credentials = {
+  code?: string;
+  username: string;
+  password: string;
+  duration?: string;
 };
 
-const deviceOptions = [
-  "Smart TV Samsung",
-  "Smart TV LG",
-  "Android TV / Google TV",
-  "TV Box Android",
-  "Fire TV Stick",
-  "Celular Android",
-  "iPhone / iPad",
-  "Computador Windows / Mac",
-];
+type ChatMessage = {
+  id: number;
+  sender: "bot" | "user";
+  text?: string;
+  time: string;
+  kind?: "video" | "credentials";
+  credentials?: Credentials;
+};
 
+const deviceOptions = ["Smart TV", "TV Box", "Fire TV Stick", "Celular", "Computador"];
+const brandOptions = [
+  "Samsung",
+  "LG",
+  "TCL",
+  "Sony",
+  "Philips",
+  "Panasonic",
+  "Philco",
+  "AOC",
+  "Roku",
+  "Outra (digitar)",
+  "⬅️ Voltar",
+];
 const appOptions = [
-  "Ainda não tenho aplicativo",
   "IPTV Smarters Pro",
   "XCIPTV",
   "TiviMate",
-  "IBO Player",
-  "SS IPTV",
-  "VLC",
+  "Zuxo Player",
   "Outro / Não sei",
+  "⬅️ Voltar",
 ];
 
-const initialForm: RequestForm = {
-  name: "",
-  whatsapp: "",
-  device: "",
-  app: "Ainda não tenho aplicativo",
-  notes: "",
-  accepted: false,
-};
+const TEST_API_URL = (import.meta.env.VITE_TEST_API_URL ?? "").trim();
 
-function onlyDigits(value: string) {
-  return value.replace(/\D/g, "");
+function getTime() {
+  return new Intl.DateTimeFormat("pt-BR", {
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date());
+}
+
+function createMessage(
+  sender: ChatMessage["sender"],
+  text: string,
+  kind?: ChatMessage["kind"],
+): ChatMessage {
+  return {
+    id: Date.now() + Math.random(),
+    sender,
+    text,
+    time: getTime(),
+    kind,
+  };
 }
 
 function App() {
-  const [form, setForm] = useState<RequestForm>(initialForm);
-  const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
-  const [preparedMessage, setPreparedMessage] = useState("");
+  const [messages, setMessages] = useState<ChatMessage[]>([
+    createMessage("bot", "Olá! 👋 Seja bem-vindo ao atendimento."),
+    createMessage("bot", "Vou te ajudar a configurar e gerar seu teste. Primeiro, em qual aparelho você deseja assistir?"),
+  ]);
+  const [step, setStep] = useState<Step>("device");
+  const [device, setDevice] = useState("");
+  const [brand, setBrand] = useState("");
+  const [app, setApp] = useState("");
+  const [draft, setDraft] = useState("");
+  const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
+  const bottomRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
-  function updateField<K extends keyof RequestForm>(key: K, value: RequestForm[K]) {
-    setForm((current) => ({ ...current, [key]: value }));
-    setError("");
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, [messages, step]);
+
+  function addBot(text: string, kind?: ChatMessage["kind"]) {
+    setMessages((current) => [...current, createMessage("bot", text, kind)]);
   }
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setError("");
-    setNotice("");
-    setCopied(false);
-
-    if (form.name.trim().length < 2) {
-      setError("Informe seu nome para continuar.");
-      return;
-    }
-
-    const phone = onlyDigits(form.whatsapp);
-    if (phone.length < 10 || phone.length > 13) {
-      setError("Confira o WhatsApp. Inclua o DDD.");
-      return;
-    }
-
-    if (!form.device) {
-      setError("Selecione o aparelho em que deseja assistir.");
-      return;
-    }
-
-    if (!form.accepted) {
-      setError("Confirme o uso dos dados para que o atendimento possa entrar em contato.");
-      return;
-    }
-
-    const message = [
-      "Olá! Gostaria de solicitar um teste IPTV.",
-      "",
-      "Nome: " + form.name.trim(),
-      "WhatsApp: " + form.whatsapp.trim(),
-      "Aparelho: " + form.device,
-      "Aplicativo: " + form.app,
-      "Observações: " + (form.notes.trim() || "Não informado"),
-    ].join("\n");
-
-    setPreparedMessage(message);
-
-    if (!WHATSAPP_NUMBER) {
-      setNotice("Sua solicitação está pronta. Falta configurar o número do WhatsApp de atendimento para abrir a conversa automaticamente.");
-      return;
-    }
-
-    const url = "https://wa.me/" + WHATSAPP_NUMBER + "?text=" + encodeURIComponent(message);
-    window.open(url, "_blank", "noopener,noreferrer");
-    setNotice("Tudo certo! O WhatsApp foi aberto com sua solicitação. Toque em enviar para concluir.");
+  function addUser(text: string) {
+    setMessages((current) => [...current, createMessage("user", text)]);
   }
 
-  async function copyMessage() {
+  function askBrand() {
+    addBot("Qual é a marca da sua TV? 👇");
+    setStep("brand");
+  }
+
+  function continueAfterBrand(selectedBrand: string) {
+    setBrand(selectedBrand);
+
+    if (selectedBrand.toLowerCase() === "lg") {
+      setApp("Zuxo Player");
+      addBot("Confira este passo a passo para instalar o aplicativo na sua TV.", "video");
+      addBot("Na sua TV LG, o aplicativo indicado é o Zuxo Player. Baixe na loja de aplicativos da TV 📺");
+      addBot("Conseguiu instalar o Zuxo Player? 👇");
+      setStep("install");
+      return;
+    }
+
+    addBot("Qual aplicativo você já instalou na sua TV " + selectedBrand + "?");
+    setStep("app");
+  }
+
+  async function generateTest() {
+    setBusy(true);
+    setStep("generating");
+    addBot("Perfeito! Já vou gerar o seu teste. Um instante... ⏳");
+
+    if (!TEST_API_URL) {
+      setBusy(false);
+      setStep("error");
+      addBot("O atendimento está pronto, mas a geração ainda precisa ser conectada ao serviço que fornece os testes. Assim que a integração oficial estiver configurada, seus dados de acesso aparecerão aqui automaticamente.");
+      return;
+    }
+
     try {
-      await navigator.clipboard.writeText(preparedMessage);
-      setCopied(true);
-      setError("");
+      const response = await fetch(TEST_API_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          device,
+          brand: brand || null,
+          app: app || null,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Não foi possível gerar o teste.");
+      }
+
+      const result = (await response.json()) as Credentials;
+
+      if (!result.username || !result.password) {
+        throw new Error("A resposta do gerador não contém os dados de acesso.");
+      }
+
+      const credentialMessage = createMessage("bot", "🔑 Seus dados de acesso:", "credentials");
+      credentialMessage.credentials = result;
+      setMessages((current) => [...current, credentialMessage]);
+      addBot("✅ Pronto! Seu teste já está ativo" + (result.duration ? " e tem duração de " + result.duration + "." : "."));
+      setStep("done");
     } catch {
-      setError("Não foi possível copiar automaticamente. Selecione e copie a mensagem manualmente.");
+      setStep("error");
+      addBot("Não consegui gerar seu teste neste momento. Tente novamente em instantes ou volte para conferir os dados.");
+    } finally {
+      setBusy(false);
     }
   }
+
+  async function handleChoice(choice: string) {
+    if (busy) return;
+    addUser(choice);
+
+    if (step === "device") {
+      if (choice === "Smart TV") {
+        setDevice(choice);
+        askBrand();
+      } else {
+        setDevice(choice);
+        addBot("Qual aplicativo você utiliza ou deseja instalar no seu aparelho?");
+        setStep("app");
+      }
+      return;
+    }
+
+    if (step === "brand") {
+      if (choice === "⬅️ Voltar") {
+        addBot("Sem problema. Em qual aparelho você deseja assistir?");
+        setStep("device");
+        return;
+      }
+      if (choice === "Outra (digitar)") {
+        addBot("Digite a marca da sua TV para continuar.");
+        setStep("customBrand");
+        inputRef.current?.focus();
+        return;
+      }
+      continueAfterBrand(choice);
+      return;
+    }
+
+    if (step === "app") {
+      if (choice === "⬅️ Voltar") {
+        if (device === "Smart TV") {
+          askBrand();
+        } else {
+          addBot("Em qual aparelho você deseja assistir?");
+          setStep("device");
+        }
+        return;
+      }
+      setApp(choice);
+      addBot("Você já conseguiu instalar o " + choice + "? 👇");
+      setStep("install");
+      return;
+    }
+
+    if (step === "install") {
+      if (choice === "Sim, consegui ✅") {
+        await generateTest();
+      } else if (choice === "Não consegui ❌") {
+        addBot("Sem problemas! 😊 Você pode tentar novamente ou voltar para escolher outro aplicativo.");
+        setStep("retry");
+      } else if (choice === "⬅️ Voltar") {
+        if (brand) {
+          askBrand();
+        } else {
+          addBot("Qual aplicativo você utiliza ou deseja instalar?");
+          setStep("app");
+        }
+      }
+      return;
+    }
+
+    if (step === "retry") {
+      if (choice === "Tentar novamente") {
+        addBot("Conseguiu instalar o " + (app || "aplicativo") + "? 👇");
+        setStep("install");
+      } else if (choice === "Trocar aplicativo") {
+        addBot("Escolha outro aplicativo da lista.");
+        setStep("app");
+      } else {
+        addBot("Vamos voltar ao início. Em qual aparelho você deseja assistir?");
+        setStep("device");
+      }
+      return;
+    }
+
+    if (step === "error") {
+      if (choice === "Tentar novamente") {
+        await generateTest();
+      } else {
+        addBot("Vamos conferir as opções novamente. Em qual aparelho você deseja assistir?");
+        setStep("device");
+      }
+      return;
+    }
+
+    if (step === "done" && choice === "Gerar outro teste") {
+      resetConversation();
+    }
+  }
+
+  function resetConversation() {
+    setMessages([
+      createMessage("bot", "Olá! 👋 Seja bem-vindo ao atendimento."),
+      createMessage("bot", "Vou te ajudar a configurar e gerar seu teste. Primeiro, em qual aparelho você deseja assistir?"),
+    ]);
+    setStep("device");
+    setDevice("");
+    setBrand("");
+    setApp("");
+    setDraft("");
+    setCopied(false);
+  }
+
+  async function copyCredentials(credentials?: Credentials) {
+    if (!credentials) return;
+    const lines = [
+      credentials.code ? "Código Uniplay: " + credentials.code : "",
+      "Usuário: " + credentials.username,
+      "Senha: " + credentials.password,
+      credentials.duration ? "Duração: " + credentials.duration : "",
+    ].filter(Boolean);
+    try {
+      await navigator.clipboard.writeText(lines.join("\n"));
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1800);
+    } catch {
+      setCopied(false);
+    }
+  }
+
+  function handleSend(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const value = draft.trim();
+    if (!value || busy) return;
+
+    setDraft("");
+    addUser(value);
+
+    if (step === "customBrand") {
+      continueAfterBrand(value);
+      return;
+    }
+
+    if (step === "install" && /sim|consegui|instalei/i.test(value)) {
+      void generateTest();
+      return;
+    }
+
+    if (step === "install" && /não|nao|consegui/i.test(value)) {
+      addBot("Sem problemas! Escolha uma opção para continuar.");
+      setStep("retry");
+      return;
+    }
+
+    addBot("Recebi sua mensagem! Selecione uma das opções acima para continuar. 😊");
+  }
+
+  const quickReplies =
+    step === "device" ? deviceOptions :
+    step === "brand" ? brandOptions :
+    step === "app" ? appOptions :
+    step === "install" ? ["Sim, consegui ✅", "Não consegui ❌", "⬅️ Voltar"] :
+    step === "retry" ? ["Tentar novamente", "Trocar aplicativo", "⬅️ Voltar"] :
+    step === "error" ? ["Tentar novamente", "Voltar ao início"] :
+    step === "done" ? ["Gerar outro teste"] :
+    [];
 
   return (
-    <div className="app-shell">
-      <div className="ambient ambient-one" />
-      <div className="ambient ambient-two" />
-
-      <header className="site-header">
-        <a className="brand" href="#inicio" aria-label="Teste IPTV — início">
-          <span className="brand-mark"><MonitorPlay size={22} strokeWidth={2.2} /></span>
-          <span className="brand-name">teste<span>iptv</span></span>
-        </a>
-        <a className="header-help" href="#como-funciona">
-          Como funciona <ArrowRight size={15} />
-        </a>
-      </header>
-
-      <main>
-        <section className="hero content-width" id="inicio">
-          <div className="hero-copy">
-            <div className="eyebrow"><span className="eyebrow-dot" /> TESTE GRATUITO · SEM COMPROMISSO</div>
-            <h1>Experimente antes.<br /><span>Escolha com confiança.</span></h1>
-            <p className="hero-description">
-              Solicite seu teste IPTV em poucos passos. Informe onde deseja assistir e continue o atendimento pelo WhatsApp.
-            </p>
-            <div className="hero-actions">
-              <a className="button button-primary" href="#solicitar">
-                Solicitar meu teste <ArrowRight size={18} />
-              </a>
-              <span className="secure-note"><ShieldCheck size={16} /> Sem cartão de crédito</span>
-            </div>
-            <div className="hero-proof">
-              <div className="proof-item"><span className="proof-icon"><Clock3 size={17} /></span><span><strong>Rápido</strong><small>Solicitação simples</small></span></div>
-              <div className="proof-divider" />
-              <div className="proof-item"><span className="proof-icon"><Smartphone size={17} /></span><span><strong>Seu aparelho</strong><small>TV, celular e mais</small></span></div>
-              <div className="proof-divider" />
-              <div className="proof-item"><span className="proof-icon"><MessageCircle size={17} /></span><span><strong>Atendimento</strong><small>Direto no WhatsApp</small></span></div>
-            </div>
+    <main className="chat-page">
+      <section className="chat-window" aria-label="Atendimento automatizado">
+        <header className="chat-header">
+          <div className="chat-avatar"><Bot size={23} /></div>
+          <div className="chat-heading">
+            <strong>Atendimento</strong>
+            <span><i /> online agora</span>
           </div>
-
-          <div className="hero-visual" aria-label="Ilustração de uma tela de entretenimento">
-            <div className="visual-orbit orbit-one" />
-            <div className="visual-orbit orbit-two" />
-            <div className="visual-card">
-              <div className="visual-topline">
-                <span className="live-indicator"><span /> SOLICITAÇÃO ONLINE</span>
-                <span className="visual-sparkle"><Sparkles size={16} /></span>
-              </div>
-              <div className="screen-frame">
-                <div className="screen-glow" />
-                <div className="screen-content">
-                  <div className="screen-logo"><Play size={20} fill="currentColor" /></div>
-                  <span className="screen-kicker">SUA EXPERIÊNCIA</span>
-                  <strong>Começa<br />agora.</strong>
-                  <div className="screen-progress"><span /></div>
-                </div>
-                <div className="screen-base" />
-              </div>
-              <div className="device-row">
-                <span><Tv size={14} /> Smart TV</span>
-                <span><Smartphone size={14} /> Mobile</span>
-                <span><Monitor size={14} /> Desktop</span>
-              </div>
-            </div>
-            <div className="floating-tag tag-top"><span className="tag-check"><Check size={13} /></span> Pedido em poucos passos</div>
-            <div className="floating-tag tag-bottom"><Wifi size={16} /> Feito para sua tela</div>
+          <div className="header-actions">
+            <button className="header-icon" type="button" aria-label="Ajuda" title="Ajuda">
+              <CircleHelp size={18} />
+            </button>
+            <button className="header-icon close-button" type="button" aria-label="Reiniciar conversa" onClick={resetConversation}>
+              <X size={21} strokeWidth={3} />
+            </button>
           </div>
-        </section>
+        </header>
 
-        <section className="benefits content-width" aria-label="Vantagens do teste">
-          <div className="benefit-card">
-            <span className="benefit-icon violet"><Clock3 size={19} /></span>
-            <div><strong>Teste por tempo limitado</strong><small>Confira as condições com o atendimento</small></div>
-          </div>
-          <div className="benefit-card">
-            <span className="benefit-icon mint"><ShieldCheck size={19} /></span>
-            <div><strong>Sem compromisso</strong><small>Solicitar não obriga a contratar</small></div>
-          </div>
-          <div className="benefit-card">
-            <span className="benefit-icon blue"><Headphones size={19} /></span>
-            <div><strong>Ajuda na configuração</strong><small>Orientação para seu aparelho</small></div>
-          </div>
-        </section>
-
-        <section className="request-section content-width" id="solicitar">
-          <div className="section-heading">
-            <div>
-              <span className="section-kicker">VAMOS COMEÇAR</span>
-              <h2>Solicite seu teste</h2>
-              <p>Preencha os campos abaixo. Leva menos de um minuto.</p>
-            </div>
-            <div className="time-pill"><Zap size={15} /> Rápido e gratuito</div>
-          </div>
-
-          <div className="request-layout">
-            <aside className="steps-panel" id="como-funciona">
-              <div className="steps-heading">
-                <span className="steps-icon"><Sparkles size={18} /></span>
-                <div><strong>Simples assim</strong><small>Veja o que acontece depois</small></div>
-              </div>
-              <div className="steps-list">
-                <div className="step-item">
-                  <span className="step-number">01</span>
-                  <div><strong>Informe seus dados</strong><p>Conte como prefere assistir e em qual aparelho.</p></div>
-                </div>
-                <div className="step-item">
-                  <span className="step-number">02</span>
-                  <div><strong>Abra o WhatsApp</strong><p>Sua mensagem será montada automaticamente para o atendimento.</p></div>
-                </div>
-                <div className="step-item">
-                  <span className="step-number">03</span>
-                  <div><strong>Receba as orientações</strong><p>A equipe confirma a disponibilidade e orienta a liberação do teste.</p></div>
-                </div>
-              </div>
-              <div className="support-note">
-                <div className="support-icon"><MessageCircle size={18} /></div>
-                <div><strong>Precisa de ajuda?</strong><p>O atendimento pode orientar você sobre o aplicativo ideal para seu dispositivo.</p></div>
-              </div>
-            </aside>
-
-            <form className="request-card" onSubmit={handleSubmit} noValidate>
-              <div className="form-heading">
-                <div>
-                  <span className="form-step">FORMULÁRIO DE SOLICITAÇÃO</span>
-                  <h3>Seus dados</h3>
-                </div>
-                <span className="free-badge"><span /> GRÁTIS</span>
-              </div>
-
-              <div className="field-grid">
-                <label className="field full-field">
-                  <span>Nome completo</span>
-                  <input
-                    type="text"
-                    name="name"
-                    autoComplete="name"
-                    placeholder="Como podemos chamar você?"
-                    value={form.name}
-                    onChange={(event) => updateField("name", event.target.value)}
-                  />
-                </label>
-
-                <label className="field full-field">
-                  <span>WhatsApp com DDD</span>
-                  <div className="input-with-icon">
-                    <MessageCircle size={17} />
-                    <input
-                      type="tel"
-                      name="whatsapp"
-                      autoComplete="tel"
-                      inputMode="tel"
-                      placeholder="(00) 00000-0000"
-                      value={form.whatsapp}
-                      onChange={(event) => updateField("whatsapp", event.target.value)}
-                    />
+        <div className="chat-body">
+          <div className="chat-date"><span>HOJE</span></div>
+          <div className="messages">
+            {messages.map((message) => (
+              <div className={"message-row " + (message.sender === "user" ? "message-out" : "message-in")} key={message.id}>
+                {message.kind === "video" ? (
+                  <div className="video-message">
+                    <div className="video-preview">
+                      <div className="video-orb" />
+                      <div className="video-grid" />
+                      <button type="button" className="video-play" aria-label="Reproduzir demonstração">
+                        <Play size={22} fill="currentColor" />
+                      </button>
+                      <span className="video-controls"><Play size={13} fill="currentColor" /><span /><Wifi size={15} /></span>
+                    </div>
+                    <span className="message-time">{message.time}</span>
                   </div>
-                </label>
-
-                <label className="field full-field">
-                  <span>Em qual aparelho deseja assistir?</span>
-                  <select value={form.device} onChange={(event) => updateField("device", event.target.value)}>
-                    <option value="">Selecione seu aparelho</option>
-                    {deviceOptions.map((device) => <option key={device} value={device}>{device}</option>)}
-                  </select>
-                </label>
-
-                <label className="field full-field">
-                  <span>Qual aplicativo você utiliza?</span>
-                  <select value={form.app} onChange={(event) => updateField("app", event.target.value)}>
-                    {appOptions.map((app) => <option key={app} value={app}>{app}</option>)}
-                  </select>
-                </label>
-
-                <label className="field full-field">
-                  <span>Observações <em>opcional</em></span>
-                  <textarea
-                    rows={3}
-                    placeholder="Se quiser, conte mais sobre seu aparelho ou sua dúvida."
-                    value={form.notes}
-                    onChange={(event) => updateField("notes", event.target.value)}
-                  />
-                </label>
+                ) : (
+                  <div className={"bubble " + (message.sender === "user" ? "bubble-out" : "bubble-in")}>
+                    {message.text && <p>{message.text}</p>}
+                    {message.kind === "credentials" && message.credentials && (
+                      <div className="credentials">
+                        {message.credentials.code && <div><span>Código Uniplay:</span><strong>{message.credentials.code}</strong></div>}
+                        <div><span>Usuário:</span><strong>{message.credentials.username}</strong></div>
+                        <div><span>Senha:</span><strong>{message.credentials.password}</strong></div>
+                        {message.credentials.duration && <div><span>Duração:</span><strong>{message.credentials.duration}</strong></div>}
+                        <button type="button" className="copy-credentials" onClick={() => void copyCredentials(message.credentials)}>
+                          {copied ? <Check size={14} /> : <Copy size={14} />}
+                          {copied ? "Copiado" : "Copiar dados"}
+                        </button>
+                      </div>
+                    )}
+                    <span className="message-meta">
+                      {message.time}
+                      {message.sender === "user" && <CheckCheck size={14} />}
+                    </span>
+                  </div>
+                )}
               </div>
+            ))}
 
-              <label className="consent-row">
-                <input
-                  type="checkbox"
-                  checked={form.accepted}
-                  onChange={(event) => updateField("accepted", event.target.checked)}
-                />
-                <span className="custom-check"><Check size={12} /></span>
-                <span>Autorizo o uso desses dados para receber contato sobre minha solicitação.</span>
-              </label>
-
-              {error && <div className="form-message error-message" role="alert">{error}</div>}
-              {notice && <div className="form-message success-message" role="status"><CheckCircle2 size={17} /> {notice}</div>}
-
-              {preparedMessage && !WHATSAPP_NUMBER && (
-                <div className="message-preview">
-                  <div><strong>Mensagem preparada</strong><small>Configure o WhatsApp do atendimento para ativar o envio automático.</small></div>
-                  <button type="button" className="copy-button" onClick={copyMessage}>
-                    {copied ? <Check size={15} /> : <Copy size={15} />}
-                    {copied ? "Copiado" : "Copiar"}
-                  </button>
-                </div>
-              )}
-
-              <button className="button button-submit" type="submit">
-                <MessageCircle size={18} /> Solicitar teste pelo WhatsApp <ArrowRight size={17} />
-              </button>
-              <p className="form-footnote"><ShieldCheck size={14} /> Seus dados são usados somente para atender esta solicitação.</p>
-            </form>
+            {busy && (
+              <div className="message-row message-in">
+                <div className="bubble bubble-in typing-bubble"><span /><span /><span /></div>
+              </div>
+            )}
+            <div ref={bottomRef} />
           </div>
-        </section>
 
-        <section className="bottom-cta content-width">
-          <div className="bottom-cta-icon"><MonitorPlay size={22} /></div>
-          <div><strong>Não sabe qual aplicativo usar?</strong><p>Selecione “Ainda não tenho aplicativo” e peça uma orientação ao atendimento.</p></div>
-          <a href="#solicitar" aria-label="Voltar ao formulário"><ArrowRight size={20} /></a>
-        </section>
-      </main>
+          {quickReplies.length > 0 && (
+            <div className="quick-replies" aria-label="Respostas rápidas">
+              {quickReplies.map((choice) => (
+                <button
+                  type="button"
+                  className={"quick-reply " + (choice.includes("Voltar") ? "quick-back" : "")}
+                  key={choice}
+                  onClick={() => void handleChoice(choice)}
+                  disabled={busy}
+                >
+                  {choice}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
 
-      <footer className="site-footer content-width">
-        <a className="brand footer-brand" href="#inicio">
-          <span className="brand-mark"><MonitorPlay size={19} /></span>
-          <span className="brand-name">teste<span>iptv</span></span>
-        </a>
-        <p>© {new Date().getFullYear()} · Solicitação de teste IPTV</p>
-        <span className="footer-status"><span /> Atendimento online</span>
-      </footer>
-    </div>
+        <form className="chat-composer" onSubmit={handleSend}>
+          <button type="button" className="composer-attach" aria-label="Anexar arquivo">
+            <Paperclip size={22} />
+          </button>
+          <input
+            ref={inputRef}
+            value={draft}
+            onChange={(event) => setDraft(event.target.value)}
+            placeholder={step === "customBrand" ? "Digite a marca da sua TV..." : "Digite sua mensagem..."}
+            aria-label="Digite sua mensagem"
+            disabled={busy}
+          />
+          <button type="submit" className="send-button" aria-label="Enviar mensagem" disabled={!draft.trim() || busy}>
+            <Send size={21} fill="currentColor" />
+          </button>
+        </form>
+        <div className="chat-version">v1.0.0</div>
+      </section>
+      <div className="page-caption"><ShieldCheck size={13} /> Atendimento automatizado · Seus dados de acesso aparecem nesta conversa</div>
+    </main>
   );
 }
 

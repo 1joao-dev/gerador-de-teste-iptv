@@ -1,3 +1,5 @@
+import crypto from "node:crypto";
+
 const allowedRoutes = [
   { method: "GET", pattern: /^\/health$/ },
   { method: "GET", pattern: /^\/api\/diagnostics\/futex$/ },
@@ -11,6 +13,20 @@ export default async function handler(req, res) {
   if (!["GET", "POST"].includes(req.method || "")) {
     res.setHeader("Allow", "GET, POST");
     return res.status(405).json({ message: "Método não permitido." });
+  }
+
+  const appAccessCode = process.env.APP_ACCESS_CODE || "";
+  const providedCodeHeader = req.headers["x-app-access-code"];
+  const providedCode = Array.isArray(providedCodeHeader) ? providedCodeHeader[0] : providedCodeHeader || "";
+  if (!appAccessCode) {
+    return res.status(503).json({ message: "O acesso ao painel ainda não foi configurado. Defina APP_ACCESS_CODE na Vercel." });
+  }
+  const expectedCodeBuffer = Buffer.from(appAccessCode);
+  const providedCodeBuffer = Buffer.from(String(providedCode));
+  const validAccessCode = expectedCodeBuffer.length === providedCodeBuffer.length
+    && crypto.timingSafeEqual(expectedCodeBuffer, providedCodeBuffer);
+  if (!validAccessCode) {
+    return res.status(401).json({ message: "Informe o código de acesso do painel em Configurações." });
   }
 
   const workerBase = process.env.WORKER_API_URL;

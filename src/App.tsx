@@ -236,7 +236,7 @@ function App() {
 
   async function checkWorkerHealth(silent = false) {
     try {
-      const response = await apiRequest("/health");
+      const response = await apiRequest("/api/health");
       const health = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(health.message || "Worker indisponível.");
       setWorkerHealth("online");

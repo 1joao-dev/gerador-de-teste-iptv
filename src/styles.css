@@ -296,6 +296,7 @@ td:first-child small { margin-top: 4px; color: #68728a; font-size: 8px; }
 .flow-question p { margin: 5px 0 0; color: #7e899f; font-size: 9px; line-height: 1.5; }
 .flow-action-row { display: flex; justify-content: flex-end; gap: 9px; margin-top: auto; padding-top: 22px; }
 .flow-action-row .primary-button, .flow-action-row .secondary-button { min-height: 39px; }
+.flow-wait-actions { display: flex; flex-wrap: wrap; gap: 9px; margin-top: auto; padding-top: 18px; }
 .waiting-state { display: flex; flex: 1; flex-direction: column; align-items: center; justify-content: center; padding: 42px 20px; text-align: center; }
 .waiting-state-icon { display: grid; width: 57px; height: 57px; margin-bottom: 15px; place-items: center; color: #a995ff; border: 1px solid rgba(153,132,255,.2); border-radius: 17px; background: rgba(143,117,255,.09); }
 .waiting-state strong { color: #e5e6f1; font-size: 12px; }
@@ -325,6 +326,8 @@ td:first-child small { margin-top: 4px; color: #68728a; font-size: 8px; }
   .app-recommendation-card { padding: 13px; }
   .app-recommendation-card strong { font-size: 15px; }
   .flow-action-row { flex-direction: column-reverse; }
+  .flow-wait-actions { flex-direction: column; }
+  .flow-wait-actions button { width: 100%; }
   .flow-action-row button { width: 100%; }
   .credential-grid { grid-template-columns: 1fr; }
   .credential-card { display: grid; grid-template-columns: 1fr auto; align-items: center; column-gap: 10px; }

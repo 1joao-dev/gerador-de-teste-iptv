@@ -270,6 +270,7 @@ app.post("/api/test-requests/:id/app-confirmation", (req, res) => {
   }
 
   busySessions.add(req.params.id);
+  session.startedAt = Date.now();
   const accepted = updateJob(req.params.id, {
     status: "running",
     message: req.body.installed

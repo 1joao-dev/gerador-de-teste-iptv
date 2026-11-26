@@ -10,7 +10,7 @@ Painel web mobile-first para iniciar e acompanhar solicitações do atendimento 
 
 ## Fluxo de atendimento
 
-O painel coleta nome, WhatsApp, dispositivo e marca. O worker abre o atendimento FUTEX em Chromium no servidor, preenche as etapas e devolve a recomendação e as credenciais para o próprio IPTV Flow. O usuário não precisa abrir a FUTEX nem preencher o formulário novamente. Se o chatbot perguntar se o aplicativo foi instalado, a confirmação pode ser feita dentro do IPTV Flow ou avançada automaticamente por uma preferência salva no app.
+O usuário clica em **Abrir atendimento** no IPTV Flow. O worker abre uma sessão real do chatbot FUTEX em Chromium no servidor e espelha as mensagens dentro do app. O usuário digita manualmente nome, WhatsApp, dispositivo, marca e qualquer resposta pedida pelo chatbot. O app envia cada resposta à sessão, atualiza a conversa e identifica o bloco final de credenciais para exibi-lo com botões de cópia. O site FUTEX não abre em outra aba ou no celular.
 
 O formato de credenciais não é fixo: o parser suporta rótulos dinâmicos como Código, Usuário, Senha, Servidor, MAC, PIN, Playlist, URL e também preserva o bloco final caso o site retorne dados sem rótulos.
 
@@ -95,7 +95,7 @@ O build e os testes verificam a aplicação e a extração de formatos de creden
 
 ## Fluxo somente pelo IPTV Flow
 
-A tela do painel não incorpora nem abre a FUTEX no celular. Toda a navegação Playwright acontece no worker. A recomendação do aplicativo, o andamento e o resultado são exibidos dentro do IPTV Flow. Em **Configurações**, a opção **Avançar automaticamente após indicar o aplicativo** faz o worker responder “Sim” à pergunta de instalação sem intervenção por solicitação. Ative somente quando essa resposta corresponder ao uso real; se ficar desligada, a confirmação aparece dentro do próprio IPTV Flow.
+A tela do painel não abre a FUTEX em outra aba. O worker mantém o navegador remoto e expõe somente o conteúdo da conversa e os controles necessários ao IPTV Flow. O usuário responde manualmente; o servidor não preenche nome, telefone, dispositivo, marca nem confirma etapas por conta própria.
 
 ## Diagnóstico real da FUTEX
 

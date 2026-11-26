@@ -222,6 +222,10 @@ app.post("/api/test-requests", async (req, res) => {
     return res.status(400).json({ message: "Informe nome, WhatsApp, dispositivo e marca válidos." });
   }
 
+  if (req.body?.autoConfirmInstall !== undefined && typeof req.body.autoConfirmInstall !== "boolean") {
+    return res.status(400).json({ message: "A opção de confirmação automática é inválida." });
+  }
+
   if (activeCount() >= maxActiveSessions) {
     return res.status(429).json({ message: "Já existe um atendimento em andamento. Aguarde a conclusão antes de iniciar outro." });
   }
@@ -240,6 +244,7 @@ app.post("/api/test-requests", async (req, res) => {
     contact: String(contact).trim().slice(0, 30),
     device: device.trim().slice(0, 60),
     brand: brand.trim().slice(0, 60),
+    autoConfirmInstall: req.body?.autoConfirmInstall === true,
     status: "queued",
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),

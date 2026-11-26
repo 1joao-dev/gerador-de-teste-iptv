@@ -367,7 +367,7 @@ function App() {
       setFlowRequest(updated);
       setRequests((current) => current.map((item) => item.id === updated.id ? updated : item));
       if (hasTestResult(updated)) setFlowStage("result");
-      else if (updated.manualChat) setFlowStage("chat");
+      else if (updated.manualChat && ["queued", "running"].includes(updated.status)) setFlowStage("chat");
       else if (updated.status === "awaiting_app" && updated.recommendedApp && updated.appInstalled !== true) setFlowStage("install");
       else setFlowStage("waiting");
       if (!silent) setToast("Status atualizado.");
@@ -416,7 +416,7 @@ function App() {
 
   function resumeRequest(request: TestRequest) {
     setFlowRequest(request);
-    setFlowStage(hasTestResult(request) ? "result" : request.manualChat ? "chat" : request.status === "awaiting_app" ? "install" : "waiting");
+    setFlowStage(hasTestResult(request) ? "result" : request.manualChat && ["queued", "running"].includes(request.status) ? "chat" : request.status === "awaiting_app" ? "install" : "waiting");
     setSelectedRequest(null);
     setPage("new");
   }

@@ -94,6 +94,7 @@ Todas as rotas `/api` exigem `Authorization: Bearer <API_TOKEN>` em produção. 
    - `DATA_DIR=/data`
    - `DATA_ENCRYPTION_KEY=<chave hexadecimal de 64 caracteres>`
    - `API_TOKEN=<token aleatório longo>`
+   - `DATA_ENCRYPTION_KEY=<64 caracteres hexadecimais gerados separadamente>`
    - `FUTEX_URL=https://futex.com.br/teste/`
    - `FUTEX_AUTOMATION_ENABLED=false` até concluir a validação
    - `FUTEX_HEADLESS=true`

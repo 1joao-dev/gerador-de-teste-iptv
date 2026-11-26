@@ -1,74 +1,98 @@
-# Gerador de Teste IPTV
+# IPTV Flow — Control Center
 
-Aplicação web mobile-first com uma interface de atendimento automatizado que se parece com uma conversa do WhatsApp. O cliente responde às perguntas por botões e recebe os dados do teste na própria conversa.
+Painel web mobile-first para organizar solicitações de testes IPTV e acompanhar um serviço de automação autorizado.
 
-> A interface não abre o WhatsApp nem envia mensagens para ele. O chat é parte do próprio site.
+## O que existe nesta versão
 
-## Fluxo implementado
+- Dashboard com indicadores calculados a partir dos registros locais.
+- Formulário de solicitação com seleção de dispositivo, marca e aplicativo.
+- Histórico local com busca e detalhes.
+- Configurações com estado explícito da integração.
+- Layout responsivo para desktop e celular.
+- Camada inicial de comunicação com uma API externa.
 
-1. O atendimento pergunta em qual aparelho o cliente deseja assistir.
-2. Para Smart TV, pergunta a marca.
-3. Para LG, apresenta o fluxo de instalação do Zuxo Player conforme a referência visual fornecida.
-4. Pergunta se o aplicativo foi instalado.
-5. Quando o cliente confirma, chama o endpoint configurado para gerar o teste.
-6. Se o serviço retornar as credenciais, elas aparecem em uma mensagem dentro do chat, com opção de copiar.
+## Importante: estado atual da integração
 
-As opções de aplicativo e os passos de outras marcas podem ser ajustados conforme o fluxo real de cada aparelho.
+A interface está funcional para navegação, seleção de opções, criação de rascunhos locais, pesquisa e visualização de registros. **Sem um backend configurado, o botão salva apenas um rascunho no navegador; nenhum teste é solicitado ou gerado.**
 
-## Tecnologias
+A integração real deve ser feita por um backend/worker separado. O frontend envia:
 
-- React
-- TypeScript
-- Vite
-- lucide-react
-- CSS responsivo
+```http
+POST /api/test-requests
+Content-Type: application/json
+```
 
-## Executar localmente
+Exemplo de corpo:
+
+```json
+{
+  "customerName": "Cliente 01",
+  "contact": "",
+  "device": "Smart TV",
+  "brand": "Samsung",
+  "app": "IPTV Smarters Pro",
+  "notes": ""
+}
+```
+
+A interface espera um objeto de resposta com pelo menos `id`, `status` e `createdAt`. Credenciais opcionais só são exibidas se vierem da resposta real do backend:
+
+```json
+{
+  "id": "request-id",
+  "status": "queued",
+  "createdAt": "2026-11-26T12:00:00.000Z",
+  "username": "retornado-pelo-servico",
+  "password": "retornado-pelo-servico",
+  "code": "opcional",
+  "duration": "opcional"
+}
+```
+
+Para sincronizar o histórico, o backend também deve implementar:
+
+```http
+GET /api/test-requests
+```
+
+O endpoint pode retornar uma lista de solicitações ou um objeto `{ "items": [] }`.
+
+## Arquitetura recomendada
+
+- **Frontend:** React + TypeScript + Vite, hospedado na Vercel.
+- **API e worker:** serviço Node.js separado, hospedado em Railway, Render ou VPS.
+- **Automação:** Playwright executado no servidor, respeitando os controles de acesso, os limites e as regras do site FUTEX.
+- **Banco de dados:** PostgreSQL/Supabase para histórico compartilhado e autenticação administrativa.
+
+Não é recomendado executar um navegador Playwright persistente dentro de uma função serverless da Vercel. A Vercel pode hospedar a interface e encaminhar as chamadas para um worker externo.
+
+## Variáveis de ambiente do frontend
+
+Crie `.env.local`:
+
+```env
+VITE_API_BASE_URL=https://sua-api.example.com
+```
+
+A URL pode ser pública. **Não coloque tokens, senhas, cookies ou chaves privadas em variáveis `VITE_*`**, pois elas são incorporadas ao bundle do navegador.
+
+## Desenvolvimento
 
 ```bash
 npm install
-cp .env.example .env
 npm run dev
 ```
 
-## Integração com o gerador de testes
+## Build
 
-Configure `VITE_TEST_API_URL` com a URL completa do endpoint oficial que cria um teste.
-
-O frontend envia uma requisição HTTP POST com este corpo:
-
-```json
-{
-  "device": "Smart TV",
-  "brand": "LG",
-  "app": "Zuxo Player"
-}
+```bash
+npm run build
+npm run preview
 ```
-
-O endpoint deve responder com JSON contendo ao menos `username` e `password`. Os campos `code` e `duration` são opcionais:
-
-```json
-{
-  "code": "CODIGO_FORNECIDO_PELO_PROVEDOR",
-  "username": "USUARIO_GERADO",
-  "password": "SENHA_GERADA",
-  "duration": "6 horas"
-}
-```
-
-As credenciais exibidas no chat vêm exclusivamente da resposta do endpoint. O frontend não inventa usuários, senhas ou códigos.
-
-**Segurança:** não coloque tokens ou segredos privados em variáveis `VITE_*`, pois elas ficam disponíveis no navegador. Se o provedor exigir autenticação secreta, a chamada deve passar por um backend seguro.
-
-## Scripts
-
-- `npm run dev`: ambiente local
-- `npm run build`: build de produção
-- `npm run preview`: visualizar o build
 
 ## Próximas etapas
 
-1. Receber a documentação ou URL da API oficial do provedor.
-2. Adequar o corpo da requisição e o formato da resposta ao contrato real.
-3. Completar os passos de instalação para Samsung, TCL, Sony, Philips, Panasonic, Philco, AOC, Roku e demais dispositivos.
-4. Testar o fluxo completo em celular e desktop.
+1. Definir e implementar o backend real da integração autorizada com a FUTEX.
+2. Configurar autenticação administrativa e banco de dados.
+3. Implementar fila, estados de execução, tentativas e logs sem segredos.
+4. Validar o fluxo ponta a ponta antes de liberar a geração real.

@@ -22,6 +22,9 @@ test("criptografa nome, telefone e credenciais no histórico persistido", () => 
     device: "Smart TV",
     brand: "Samsung",
     accessDetails: [{ label: "Usuário", value: "cliente01" }, { label: "Senha", value: "segredo" }],
+    username: "cliente01",
+    password: "segredo",
+    code: "CODIGO123",
     status: "completed",
   };
 
@@ -31,16 +34,23 @@ test("criptografa nome, telefone e credenciais no histórico persistido", () => 
   assert.equal(stored.customerName, undefined);
   assert.equal(stored.contact, undefined);
   assert.equal(stored.accessDetails, undefined);
+  assert.equal(stored.username, undefined);
+  assert.equal(stored.password, undefined);
+  assert.equal(stored.code, undefined);
   assert.ok(stored.privateDataEncrypted);
   assert.equal(serialized.includes("Cliente Exemplo"), false);
   assert.equal(serialized.includes("62999999999"), false);
   assert.equal(serialized.includes("cliente01"), false);
   assert.equal(serialized.includes("segredo"), false);
+  assert.equal(serialized.includes("CODIGO123"), false);
 
   const restored = restoreJobFromStorage(stored, key);
   assert.equal(restored.customerName, job.customerName);
   assert.equal(restored.contact, job.contact);
   assert.deepEqual(restored.accessDetails, job.accessDetails);
+  assert.equal(restored.username, job.username);
+  assert.equal(restored.password, job.password);
+  assert.equal(restored.code, job.code);
   assert.equal(restored.status, job.status);
 });
 

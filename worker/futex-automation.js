@@ -261,6 +261,31 @@ export async function inspectFutexPage() {
               messageContainerText: node.tagName === "TEXTAREA" && isShadowRoot
                 ? (root.querySelector(".messages")?.innerText || "").trim().slice(0, 8_000)
                 : undefined,
+              chatStructure: node.tagName === "TEXTAREA" && isShadowRoot
+                ? {
+                    messages: Array.from(root.querySelectorAll(".messages .msg, .messages .system, .messages .options .chip, .messages .cta"))
+                      .slice(0, 40)
+                      .map((message) => ({
+                        tag: message.tagName.toLowerCase(),
+                        className: message.getAttribute("class"),
+                        role: message.getAttribute("role"),
+                        text: (message.innerText || message.textContent || "").trim().slice(0, 500),
+                        buttons: Array.from(message.querySelectorAll("button, [role='button']"))
+                          .map((button) => ({
+                            text: (button.innerText || button.textContent || "").trim(),
+                            ariaLabel: button.getAttribute("aria-label"),
+                            className: button.getAttribute("class"),
+                          })).slice(0, 10),
+                      })),
+                    sendButton: Array.from(root.querySelectorAll("button"))
+                      .filter((button) => /enviar mensagem/i.test(button.getAttribute("aria-label") || ""))
+                      .map((button) => ({
+                        ariaLabel: button.getAttribute("aria-label"),
+                        className: button.getAttribute("class"),
+                        disabled: button.disabled,
+                      })),
+                  }
+                : undefined,
             };
           })),
         frame.locator("body").evaluate((body) => {

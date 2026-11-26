@@ -100,7 +100,9 @@ function extractDuration(text) {
 }
 
 function extractAccessDetails(text) {
-  const marker = text.toLowerCase().lastIndexOf("seus dados de acesso");
+  const lower = text.toLowerCase();
+  const markers = ["seus dados de acesso", "dados de acesso", "acesso liberado", "dados do teste"];
+  const marker = markers.reduce((latest, item) => Math.max(latest, lower.lastIndexOf(item)), -1);
   if (marker < 0) return [];
 
   const tail = text.slice(marker).split(/pronto!|seu teste já está ativo/i)[0];
@@ -109,12 +111,12 @@ function extractAccessDetails(text) {
 
   for (const line of lines) {
     const clean = line.replace(/^[🔑✅☑️📌\s]+/u, "");
-    const match = clean.match(/^([^:]{2,64}):\s*(.+)$/);
+    const match = clean.match(/^([^:=]{2,64})[:=]\s*(.+)$/);
     if (!match) continue;
 
     const label = match[1].trim();
     const value = match[2].trim();
-    if (!value || /seus dados de acesso/i.test(label)) continue;
+    if (!value || /dados de acesso/i.test(label)) continue;
     details.push({ label, value });
   }
   return details;

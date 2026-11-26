@@ -305,6 +305,10 @@ td:first-child small { margin-top: 4px; color: #68728a; font-size: 8px; }
 .success-duration > div { display: flex; flex-direction: column; gap: 3px; }
 .success-duration strong { color: #8ce5c1; font-size: 10px; }
 .success-duration span { color: #a3bdb2; font-size: 9px; }
+
+.result-app-label { margin-top: 13px; padding: 10px 12px; color: #8791a8; border: 1px solid var(--line); border-radius: 9px; background: rgba(255,255,255,.018); font-size: 9px; }
+.result-app-label strong { color: #d8d0ff; }
+
 .credential-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 9px; margin-top: 13px; }
 .credential-card { min-width: 0; padding: 13px; border: 1px solid var(--line-strong); border-radius: 10px; background: rgba(255,255,255,.02); }
 .credential-card > span { display: block; color: #7c879f; font-size: 7px; font-weight: 800; letter-spacing: .9px; }

@@ -160,8 +160,8 @@ async function waitForAppStep(scope, previousText) {
       recommendedApp: app || "Aplicativo indicado pela FUTEX",
       appGuideUrl: await extractGuideUrl(scope),
       message: app
-        ? "Instale o aplicativo indicado e confirme para continuar o atendimento."
-        : "A FUTEX solicitou a confirmação de instalação. Confira a orientação exibida no site.",
+        ? "Instale o aplicativo indicado e confirme aqui no IPTV Flow para continuar."
+        : "A FUTEX solicitou a confirmação de instalação. Responda aqui no IPTV Flow para continuar.",
     };
   } catch (error) {
     const latestText = await visibleText(scope);

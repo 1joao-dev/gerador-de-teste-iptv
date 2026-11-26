@@ -75,7 +75,7 @@ function formatDate(value: string) {
 }
 
 function formatPhone(value: string) {
-  const digits = value.replace(/\\D/g, "").slice(0, 11);
+  const digits = value.replace(/\D/g, "").slice(0, 11);
   if (digits.length <= 2) return digits ? "(" + digits : "";
   if (digits.length <= 6) return "(" + digits.slice(0, 2) + ") " + digits.slice(2);
   if (digits.length <= 10) return "(" + digits.slice(0, 2) + ") " + digits.slice(2, 6) + "-" + digits.slice(6);
@@ -118,8 +118,8 @@ function App() {
   const [form, setForm] = useState({
     customerName: "",
     contact: "",
-    device: "Smart TV",
-    brand: "Samsung",
+    device: "",
+    brand: "",
   });
 
   useEffect(() => {
@@ -172,7 +172,7 @@ function App() {
 
   async function submitRequest(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const phoneDigits = form.contact.replace(/\\D/g, "");
+    const phoneDigits = form.contact.replace(/\D/g, "");
     if (!form.customerName.trim() || phoneDigits.length < 10 || !form.device || !form.brand.trim()) {
       setToast("Preencha nome, celular, tipo de dispositivo e marca.");
       return;
@@ -210,7 +210,7 @@ function App() {
         };
         setRequests((current) => [request, ...current]);
         setToast("Solicitação enviada para a automação.");
-        setForm({ customerName: "", contact: "", device: "Smart TV", brand: "" });
+        setForm({ customerName: "", contact: "", device: "", brand: "" });
         setPage("history");
       } catch (error) {
         setToast(error instanceof Error ? error.message : "Falha ao enviar a solicitação.");

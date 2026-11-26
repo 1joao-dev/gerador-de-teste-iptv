@@ -99,7 +99,7 @@ O endpoint pode retornar uma lista de solicitações ou um objeto `{ "items": []
 ## Arquitetura recomendada
 
 - **Frontend:** React + TypeScript + Vite, hospedado na Vercel.
-- **API e worker:** serviço Node.js separado, hospedado em Railway, Render ou VPS.
+- **API e worker:** serviço Node.js em `worker/`, hospedado em Railway, Render ou VPS.
 - **Automação:** Playwright executado no servidor, respeitando os controles de acesso, os limites e as regras do site FUTEX.
 - **Banco de dados:** PostgreSQL/Supabase para histórico compartilhado e autenticação administrativa.
 
@@ -131,7 +131,12 @@ npm run preview
 
 ## Próximas etapas
 
-1. Implementar o backend/worker que conduz as etapas observadas na página FUTEX e aguarda a confirmação de instalação do aplicativo.
+1. Instalar e validar o serviço Playwright disponível em `worker/` com uma solicitação real controlada; ajustar seletores caso o atendimento do site tenha mudado.
 2. Configurar autenticação administrativa e banco de dados.
 3. Implementar fila, estados de execução, tentativas e logs sem segredos.
 4. Validar o fluxo ponta a ponta antes de liberar a geração real.
+
+
+## Worker Playwright
+
+O primeiro esqueleto da automação está em `worker/`. Consulte [worker/README.md](worker/README.md) para instalação, variáveis de ambiente, endpoints e limitações. A automação permanece desativada por padrão até a validação do fluxo real.

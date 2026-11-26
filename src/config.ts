@@ -1,1 +1,1 @@
-export const WHATSAPP_NUMBER = (import.meta.env.VITE_WHATSAPP_NUMBER ?? "").replace(/\D/g, "");
+export const TEST_API_URL = (import.meta.env.VITE_TEST_API_URL ?? "").trim();

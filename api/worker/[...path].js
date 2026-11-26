@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 
 const allowedRoutes = [
-  { method: "GET", pattern: /^\/health$/ },
+  { method: "GET", pattern: /^\/api\/health$/ },
   { method: "GET", pattern: /^\/api\/diagnostics\/futex$/ },
   { method: "GET", pattern: /^\/api\/test-requests$/ },
   { method: "POST", pattern: /^\/api\/test-requests$/ },

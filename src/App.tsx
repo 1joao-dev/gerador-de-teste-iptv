@@ -155,6 +155,8 @@ function App() {
   const [refreshingFlow, setRefreshingFlow] = useState(false);
   const [workerHealth, setWorkerHealth] = useState<"checking" | "online" | "offline">("checking");
   const [workerAutomationEnabled, setWorkerAutomationEnabled] = useState(false);
+  const [diagnosingFutex, setDiagnosingFutex] = useState(false);
+  const [futexDiagnostic, setFutexDiagnostic] = useState("");
   const [flowRequest, setFlowRequest] = useState<TestRequest | null>(null);
   const [flowStage, setFlowStage] = useState<"form" | "install" | "waiting" | "result">("form");
   const [brandOther, setBrandOther] = useState("");
@@ -237,6 +239,22 @@ function App() {
       setWorkerHealth("offline");
       setWorkerAutomationEnabled(false);
       if (!silent) setToast("Não foi possível conectar ao worker. Confira a implantação e as variáveis de ambiente.");
+    }
+  }
+
+  async function runFutexDiagnostic() {
+    setDiagnosingFutex(true);
+    setFutexDiagnostic("");
+    try {
+      const response = await apiRequest("/api/diagnostics/futex");
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.message || "Não foi possível diagnosticar a FUTEX.");
+      setFutexDiagnostic(JSON.stringify(result, null, 2));
+      setToast("Diagnóstico da FUTEX concluído.");
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : "Falha no diagnóstico da FUTEX.");
+    } finally {
+      setDiagnosingFutex(false);
     }
   }
 
@@ -670,7 +688,7 @@ function App() {
             <section className="page-section">
               <div className="page-heading"><div><div className="eyebrow"><Settings2 size={13} /> PREFERÊNCIAS</div><h1>Configurações</h1><p>Gerencie as conexões e os parâmetros do aplicativo.</p></div></div>
               <div className="settings-layout">
-                <section className="panel settings-panel"><div className="settings-heading"><span className="settings-icon"><RadioTower size={19} /></span><div><h3>Integração de automação</h3><p>Conexão entre o aplicativo e o serviço que processa as solicitações.</p></div><span className={"config-value " + (automationReady ? "configured" : "pending")}>{workerHealth === "checking" ? "Verificando" : automationReady ? "Ativo" : workerHealth === "online" ? "Pausado" : "Offline"}</span></div><div className="settings-row"><div><strong>Proxy seguro da aplicação</strong><small>A chave do worker permanece no servidor Vercel.</small></div><span className="config-value configured">Configurado</span></div><div className="settings-row"><div><strong>Worker de automação</strong><small>Processador Playwright executado em servidor persistente.</small></div><span className={"config-value " + (workerHealth === "online" ? "configured" : "pending")}>{workerHealth === "checking" ? "Verificando" : workerHealth === "online" ? "Online" : "Offline"}</span></div><div className="settings-row"><div><strong>Automação FUTEX</strong><small>Ativada por variável segura no servidor.</small></div><span className={"config-value " + (automationReady ? "configured" : "pending")}>{workerAutomationEnabled ? "Ativa" : "Desativada"}</span></div><div className="settings-row"><div><strong>Site de referência</strong><small>Portal utilizado pelo fluxo de testes.</small></div><a className="external-link" href="https://futex.com.br/teste/" target="_blank" rel="noreferrer">Abrir FUTEX <ArrowUpRight size={13} /></a></div><div className="settings-callout"><LockKeyhole size={16} /><p>WORKER_API_TOKEN fica somente nas variáveis de ambiente da Vercel. API_TOKEN fica no servidor do worker. Nenhuma chave privada é armazenada no navegador.</p></div><button className="secondary-button" type="button" onClick={() => void checkWorkerHealth()}><RefreshCw size={14} /> Verificar conexão</button></section>
+                <section className="panel settings-panel"><div className="settings-heading"><span className="settings-icon"><RadioTower size={19} /></span><div><h3>Integração de automação</h3><p>Conexão entre o aplicativo e o serviço que processa as solicitações.</p></div><span className={"config-value " + (automationReady ? "configured" : "pending")}>{workerHealth === "checking" ? "Verificando" : automationReady ? "Ativo" : workerHealth === "online" ? "Pausado" : "Offline"}</span></div><div className="settings-row"><div><strong>Proxy seguro da aplicação</strong><small>A chave do worker permanece no servidor Vercel.</small></div><span className="config-value configured">Configurado</span></div><div className="settings-row"><div><strong>Worker de automação</strong><small>Processador Playwright executado em servidor persistente.</small></div><span className={"config-value " + (workerHealth === "online" ? "configured" : "pending")}>{workerHealth === "checking" ? "Verificando" : workerHealth === "online" ? "Online" : "Offline"}</span></div><div className="settings-row"><div><strong>Automação FUTEX</strong><small>Ativada por variável segura no servidor.</small></div><span className={"config-value " + (automationReady ? "configured" : "pending")}>{workerAutomationEnabled ? "Ativa" : "Desativada"}</span></div><div className="settings-row"><div><strong>Site de referência</strong><small>Portal utilizado pelo fluxo de testes.</small></div><a className="external-link" href="https://futex.com.br/teste/" target="_blank" rel="noreferrer">Abrir FUTEX <ArrowUpRight size={13} /></a></div><div className="settings-callout"><LockKeyhole size={16} /><p>WORKER_API_TOKEN fica somente nas variáveis de ambiente da Vercel. API_TOKEN fica no servidor do worker. Nenhuma chave privada é armazenada no navegador.</p></div><button className="secondary-button" type="button" onClick={() => void checkWorkerHealth()}><RefreshCw size={14} /> Verificar conexão</button><button className="secondary-button" type="button" onClick={() => void runFutexDiagnostic()} disabled={diagnosingFutex || workerHealth !== "online"}>{diagnosingFutex ? <LoaderCircle className="spin" size={14} /> : <Activity size={14} />} {diagnosingFutex ? "Analisando site..." : "Diagnosticar FUTEX"}</button>{futexDiagnostic && <pre className="diagnostic-output">{futexDiagnostic}</pre>}</section>
                 <section className="panel settings-panel"><div className="settings-heading"><span className="settings-icon"><Gauge size={19} /></span><div><h3>Ambiente do aplicativo</h3><p>Informações de execução desta versão.</p></div></div><div className="settings-row"><div><strong>Interface web</strong><small>Aplicação React responsiva.</small></div><span className="config-value configured">Operacional</span></div><div className="settings-row"><div><strong>Armazenamento local</strong><small>Rascunhos salvos neste navegador.</small></div><span className="config-value configured">Ativo</span></div><div className="settings-row"><div><strong>Sincronização entre dispositivos</strong><small>Histórico persistido no volume do servidor worker.</small></div><span className="config-value configured">Preparada</span></div></section>
               </div>
             </section>

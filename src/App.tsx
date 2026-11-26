@@ -37,7 +37,7 @@ import {
 import { API_BASE_URL } from "./config";
 
 type Page = "overview" | "new" | "history" | "settings";
-type RequestStatus = "draft" | "queued" | "running" | "awaiting_app" | "completed" | "failed";
+type RequestStatus = "draft" | "queued" | "running" | "awaiting_app" | "needs_human" | "completed" | "failed";
 
 type AccessDetail = { label: string; value: string };
 
@@ -62,6 +62,7 @@ type TestRequest = {
 };
 
 const STORAGE_KEY = "iptv-automator-requests-v1";
+const API_TOKEN_STORAGE_KEY = "iptv-flow-worker-token-v1";
 
 const devices = [
   { label: "Smart TV", detail: "Televisores inteligentes", icon: Tv },
@@ -110,6 +111,7 @@ function statusLabel(status: RequestStatus) {
     queued: "Na fila",
     running: "Em execução",
     awaiting_app: "Instalar aplicativo",
+    needs_human: "Ação manual necessária",
     completed: "Concluído",
     failed: "Falhou",
   };
@@ -152,6 +154,8 @@ function App() {
   const [submitting, setSubmitting] = useState(false);
   const [confirmingApp, setConfirmingApp] = useState(false);
   const [refreshingFlow, setRefreshingFlow] = useState(false);
+  const [apiToken, setApiToken] = useState("");
+  const [apiTokenDraft, setApiTokenDraft] = useState("");
   const [flowRequest, setFlowRequest] = useState<TestRequest | null>(null);
   const [flowStage, setFlowStage] = useState<"form" | "install" | "waiting" | "result">("form");
   const [brandOther, setBrandOther] = useState("");
@@ -166,6 +170,9 @@ function App() {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved) setRequests(JSON.parse(saved) as TestRequest[]);
+      const savedToken = localStorage.getItem(API_TOKEN_STORAGE_KEY) ?? "";
+      setApiToken(savedToken);
+      setApiTokenDraft(savedToken);
     } catch {
       setRequests([]);
     }
@@ -184,7 +191,7 @@ function App() {
 
   const stats = useMemo(() => ({
     total: requests.length,
-    queued: requests.filter((item) => item.status === "queued" || item.status === "draft" || item.status === "awaiting_app").length,
+    queued: requests.filter((item) => item.status === "queued" || item.status === "draft" || item.status === "awaiting_app" || item.status === "needs_human").length,
     completed: requests.filter((item) => item.status === "completed").length,
     failed: requests.filter((item) => item.status === "failed").length,
   }), [requests]);
@@ -204,6 +211,21 @@ function App() {
     setPage(nextPage);
     setMobileMenuOpen(false);
     setSelectedRequest(null);
+  }
+
+  function apiRequest(path: string, options: RequestInit = {}) {
+    const headers = new Headers(options.headers || {});
+    if (apiToken) headers.set("Authorization", "Bearer " + apiToken);
+    if (options.body && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
+    return fetch(API_BASE_URL.replace(/\/$/, "") + path, { ...options, headers });
+  }
+
+  function saveApiToken() {
+    const nextToken = apiTokenDraft.trim();
+    if (nextToken) localStorage.setItem(API_TOKEN_STORAGE_KEY, nextToken);
+    else localStorage.removeItem(API_TOKEN_STORAGE_KEY);
+    setApiToken(nextToken);
+    setToast(nextToken ? "Chave de acesso salva neste navegador." : "Chave de acesso removida.");
   }
 
   function updateForm(field: keyof typeof form, value: string) {
@@ -229,7 +251,7 @@ function App() {
 
     if (API_BASE_URL) {
       try {
-        const response = await fetch(API_BASE_URL.replace(/\/$/, "") + "/api/test-requests", {
+        const response = await apiRequest("/api/test-requests", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
@@ -290,9 +312,7 @@ function App() {
     }
     setConfirmingApp(true);
     try {
-      const response = await fetch(
-        API_BASE_URL.replace(/\/$/, "") + "/api/test-requests/" + encodeURIComponent(flowRequest.id) + "/app-confirmation",
-        {
+      const response = await apiRequest("/api/test-requests/" + encodeURIComponent(flowRequest.id) + "/app-confirmation", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ installed }),
@@ -332,9 +352,7 @@ function App() {
     }
     setRefreshingFlow(true);
     try {
-      const response = await fetch(
-        API_BASE_URL.replace(/\/$/, "") + "/api/test-requests/" + encodeURIComponent(flowRequest.id),
-      );
+      const response = await apiRequest("/api/test-requests/" + encodeURIComponent(flowRequest.id));
       const result = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(result.message || "Não foi possível consultar o andamento.");
       const updated: TestRequest = { ...flowRequest, ...result };
@@ -367,7 +385,7 @@ function App() {
       return;
     }
     try {
-      const response = await fetch(API_BASE_URL.replace(/\/$/, "") + "/api/test-requests");
+      const response = await apiRequest("/api/test-requests");
       if (!response.ok) throw new Error("Não foi possível atualizar o histórico.");
       const data = await response.json();
       const items = Array.isArray(data) ? data : data.items;
@@ -584,7 +602,7 @@ function App() {
                     {flowStage === "waiting" && flowRequest && (
                       <>
                         <div className="flow-state-heading"><span className="step-number">04</span><div><h3>Solicitação em andamento</h3><p>Os dados foram enviados ao serviço de automação.</p></div><StatusPill status={flowRequest.status} /></div>
-                        <div className="waiting-state"><span className="waiting-state-icon"><LoaderCircle size={25} className="spin" /></span><strong>Aguardando resposta da FUTEX</strong><p>{flowRequest.message || "Quando a FUTEX indicar o aplicativo ou retornar os dados do teste, eles aparecerão aqui."}</p></div>
+                        <div className="waiting-state"><span className="waiting-state-icon"><LoaderCircle size={25} className="spin" /></span><strong>{flowRequest.status === "needs_human" ? "Ação manual necessária" : "Aguardando resposta da FUTEX"}</strong><p>{flowRequest.message || "Quando a FUTEX indicar o aplicativo ou retornar os dados do teste, eles aparecerão aqui."}</p></div>
                         <div className="flow-wait-actions"><button className="secondary-button" type="button" onClick={() => void refreshFlowRequest()} disabled={refreshingFlow}>{refreshingFlow ? <LoaderCircle className="spin" size={15} /> : <RefreshCw size={15} />} Atualizar status</button><button className="back-button" type="button" onClick={() => { setFlowStage("form"); setFlowRequest(null); }}>Voltar ao formulário</button></div>
                       </>
                     )}
@@ -634,7 +652,7 @@ function App() {
             <section className="page-section">
               <div className="page-heading"><div><div className="eyebrow"><Settings2 size={13} /> PREFERÊNCIAS</div><h1>Configurações</h1><p>Gerencie as conexões e os parâmetros do aplicativo.</p></div></div>
               <div className="settings-layout">
-                <section className="panel settings-panel"><div className="settings-heading"><span className="settings-icon"><RadioTower size={19} /></span><div><h3>Integração de automação</h3><p>Conexão entre o aplicativo e o serviço que processa as solicitações.</p></div><span className={"config-value " + (API_BASE_URL ? "configured" : "pending")}>{API_BASE_URL ? "Conectado" : "Pendente"}</span></div><div className="settings-row"><div><strong>API do backend</strong><small>Endereço público do serviço de solicitações.</small></div><span className={"config-value " + (API_BASE_URL ? "configured" : "")}>{API_BASE_URL ? "Configurada" : "Não configurada"}</span></div><div className="settings-row"><div><strong>Worker de automação</strong><small>Processador Playwright executado no servidor.</small></div><span className="config-value pending">Pendente</span></div><div className="settings-row"><div><strong>Site de referência</strong><small>Portal utilizado pelo fluxo de testes.</small></div><a className="external-link" href="https://futex.com.br/teste/" target="_blank" rel="noreferrer">Abrir FUTEX <ArrowUpRight size={13} /></a></div><div className="settings-callout"><LockKeyhole size={16} /><p>Tokens, senhas de acesso e cookies de sessão devem ser configurados no ambiente seguro do worker. Nunca os coloque no código do navegador.</p></div></section>
+                <section className="panel settings-panel"><div className="settings-heading"><span className="settings-icon"><RadioTower size={19} /></span><div><h3>Integração de automação</h3><p>Conexão entre o aplicativo e o serviço que processa as solicitações.</p></div><span className={"config-value " + (API_BASE_URL ? "configured" : "pending")}>{API_BASE_URL ? "Conectado" : "Pendente"}</span></div><div className="settings-row"><div><strong>API do backend</strong><small>Endereço público do serviço de solicitações.</small></div><span className={"config-value " + (API_BASE_URL ? "configured" : "")}>{API_BASE_URL ? "Configurada" : "Não configurada"}</span></div><div className="api-token-config"><label className="field"><span>Chave de acesso do worker <small>API_TOKEN</small></span><input type="password" value={apiTokenDraft} onChange={(event) => setApiTokenDraft(event.target.value)} placeholder="Cole aqui a chave configurada no servidor" autoComplete="off" /></label><button className="secondary-button" type="button" onClick={saveApiToken}><Check size={14} /> Salvar chave</button><p>A chave fica salva apenas neste navegador. Use esta configuração somente em um painel privado de administrador.</p></div><div className="settings-row"><div><strong>Worker de automação</strong><small>Processador Playwright executado no servidor.</small></div><span className="config-value pending">Pendente</span></div><div className="settings-row"><div><strong>Site de referência</strong><small>Portal utilizado pelo fluxo de testes.</small></div><a className="external-link" href="https://futex.com.br/teste/" target="_blank" rel="noreferrer">Abrir FUTEX <ArrowUpRight size={13} /></a></div><div className="settings-callout"><LockKeyhole size={16} /><p>Tokens, senhas de acesso e cookies de sessão devem ser configurados no ambiente seguro do worker. Nunca os coloque no código do navegador.</p></div></section>
                 <section className="panel settings-panel"><div className="settings-heading"><span className="settings-icon"><Gauge size={19} /></span><div><h3>Ambiente do aplicativo</h3><p>Informações de execução desta versão.</p></div></div><div className="settings-row"><div><strong>Interface web</strong><small>Aplicação React responsiva.</small></div><span className="config-value configured">Operacional</span></div><div className="settings-row"><div><strong>Armazenamento local</strong><small>Rascunhos salvos neste navegador.</small></div><span className="config-value configured">Ativo</span></div><div className="settings-row"><div><strong>Sincronização entre dispositivos</strong><small>Depende da API e do banco de dados.</small></div><span className="config-value pending">Pendente</span></div></section>
               </div>
             </section>

@@ -1,5 +1,5 @@
 import { chromium } from "playwright";
-import { extractAccessDetails, extractDuration, extractRecommendedApp, extractResult } from "./futex-parser.js";
+import { extractAccessDetails, extractRecommendedApp, extractResult } from "./futex-parser.js";
 
 const FUTEX_URL = process.env.FUTEX_URL || "https://futex.com.br/teste/";
 const HEADLESS = process.env.FUTEX_HEADLESS !== "false";
@@ -136,6 +136,53 @@ async function waitForAppStep(scope, previousText) {
     const lateResult = extractResult(latestText);
     if (lateResult) return lateResult;
     throw error;
+  }
+}
+
+export async function inspectFutexPage() {
+  const browser = await getBrowser();
+  const context = await browser.newContext({
+    locale: "pt-BR",
+    viewport: { width: 1365, height: 900 },
+  });
+  const page = await context.newPage();
+
+  try {
+    await page.goto(FUTEX_URL, { waitUntil: "domcontentloaded", timeout: 35_000 });
+    await page.waitForTimeout(3_000);
+    const frames = await Promise.all(page.frames().slice(0, 8).map(async (frame) => {
+      const [text, controls] = await Promise.all([
+        visibleText(frame),
+        frame.locator("input, textarea, select, button, [role='button'], [contenteditable='true']")
+          .evaluateAll((nodes) => nodes.filter((node) => {
+            const rect = node.getBoundingClientRect();
+            const style = window.getComputedStyle(node);
+            return rect.width > 0 && rect.height > 0 && style.visibility !== "hidden" && style.display !== "none";
+          }).slice(0, 40).map((node) => ({
+            tag: node.tagName.toLowerCase(),
+            type: node.getAttribute("type"),
+            role: node.getAttribute("role"),
+            placeholder: node.getAttribute("placeholder"),
+            ariaLabel: node.getAttribute("aria-label"),
+            text: (node.innerText || node.textContent || "").trim().slice(0, 100),
+          }))),
+      ]);
+      return {
+        name: frame.name(),
+        url: frame.url(),
+        visibleText: text.slice(0, 2_000),
+        controls,
+      };
+    }));
+
+    return {
+      url: page.url(),
+      title: await page.title(),
+      checkedAt: new Date().toISOString(),
+      frames,
+    };
+  } finally {
+    await context.close().catch(() => undefined);
   }
 }
 

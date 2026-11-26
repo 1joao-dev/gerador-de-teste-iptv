@@ -71,14 +71,17 @@ Use o resultado para validar os seletores antes de habilitar a automação. O us
 
 Gere duas chaves independentes com `openssl rand -hex 32`: uma para `API_TOKEN` (use o mesmo valor em `WORKER_API_TOKEN` na Vercel) e outra para `DATA_ENCRYPTION_KEY`. A chave de criptografia protege nome, telefone e credenciais no arquivo `jobs.json`. Guarde-a com segurança e nunca a troque enquanto houver dados salvos. Na Vercel, gere `APP_ACCESS_CODE` com `openssl rand -hex 16` e informe esse código uma vez em Configurações no painel.
 
-## Conversa manual pelo IPTV Flow
+## Fluxo com interface própria
 
-- Abra um atendimento com `POST /api/test-requests` enviando `{ "manualChat": true }`.
-- Consulte `GET /api/test-requests/:id` para receber `chatMessages`, `chatOptions` e `chatInputPlaceholder`.
-- Envie texto com `POST /api/test-requests/:id/chat` e `{ "message": "resposta digitada pelo usuário" }`.
-- Quando o chatbot apresentar opções rápidas, o painel pode enviar `{ "option": "texto exato da opção" }`.
-- O worker não preenche dados nem confirma etapas por conta própria no modo manual. O usuário conduz o atendimento.
-- A transcrição da conversa é criptografada junto com os dados privados no histórico persistido.
+1. O usuário informa nome, WhatsApp, dispositivo e marca no formulário do IPTV Flow.
+2. O painel envia esses dados a `POST /api/test-requests`.
+3. O worker abre `FUTEX_URL` no Chromium, preenche os campos e seleciona as opções equivalentes no atendimento original.
+4. Quando a FUTEX indica o aplicativo, o worker mantém a sessão aberta e o IPTV Flow mostra a recomendação ao usuário.
+5. O usuário confirma se conseguiu instalar o aplicativo por `POST /api/test-requests/:id/app-confirmation`.
+6. O worker continua o atendimento, aguarda a resposta final e extrai as credenciais com o parser.
+7. O IPTV Flow exibe o resultado e permite copiar os campos individualmente ou em conjunto.
+
+O usuário final vê apenas a interface própria do IPTV Flow. O site da FUTEX é utilizado pelo Chromium no servidor, sem ser incorporado ou aberto no celular.
 
 ## Endpoints
 

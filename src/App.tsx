@@ -193,7 +193,7 @@ function App() {
     void refreshHistory(true);
     const interval = window.setInterval(() => { void checkWorkerHealth(true); }, 30_000);
     return () => window.clearInterval(interval);
-  }, [loaded]);
+  }, [loaded, appAccessCode]);
 
   useEffect(() => {
     if (!toast) return;
@@ -237,15 +237,15 @@ function App() {
   async function checkWorkerHealth(silent = false) {
     try {
       const response = await apiRequest("/health");
-      if (!response.ok) throw new Error("Worker indisponível.");
-      const health = await response.json();
+      const health = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(health.message || "Worker indisponível.");
       setWorkerHealth("online");
       setWorkerAutomationEnabled(health.automationEnabled === true);
       if (!silent) setToast("Conexão com o worker verificada.");
-    } catch {
+    } catch (error) {
       setWorkerHealth("offline");
       setWorkerAutomationEnabled(false);
-      if (!silent) setToast("Não foi possível conectar ao worker. Confira a implantação e as variáveis de ambiente.");
+      if (!silent) setToast(error instanceof Error ? error.message : "Não foi possível conectar ao worker.");
     }
   }
 
@@ -256,7 +256,6 @@ function App() {
     setAppAccessCode(nextCode);
     setToast(nextCode ? "Código de acesso salvo neste navegador." : "Código de acesso removido.");
     setWorkerHealth("checking");
-    window.setTimeout(() => { void checkWorkerHealth(true); }, 0);
   }
 
   async function runFutexDiagnostic() {

@@ -85,6 +85,7 @@ Execute os testes do parser:
 
 ```bash
 npm test --prefix worker
+node --test tests/proxy.test.js
 npm run check --prefix worker
 npm run build
 ```

@@ -91,6 +91,18 @@ test("proxy encaminha apenas rotas permitidas e mantém token do worker no servi
     assert.equal(forwarded.url, "https://worker.example/api/health");
     assert.equal(forwarded.options.headers.Authorization, "Bearer token-interno-do-worker");
 
+    const chatResponse = mockResponse();
+    await handler({
+      method: "POST",
+      query: { path: ["api", "test-requests", "123e4567-e89b-12d3-a456-426614174000", "chat"] },
+      headers: { "x-app-access-code": "painel-secreto-de-teste-com-mais-de-32-caracteres" },
+      body: { message: "João" },
+    }, chatResponse);
+    assert.equal(chatResponse.statusCode, 200);
+    assert.equal(forwarded.url, "https://worker.example/api/test-requests/123e4567-e89b-12d3-a456-426614174000/chat");
+    assert.equal(forwarded.options.method, "POST");
+    assert.deepEqual(JSON.parse(forwarded.options.body), { message: "João" });
+
     const blocked = mockResponse();
     await handler({
       method: "GET",

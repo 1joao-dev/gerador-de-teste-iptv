@@ -270,6 +270,13 @@ td:first-child small { margin-top: 4px; color: #68728a; font-size: 8px; }
 .result-box b { color: #e1f1e9; }
 
 
+
+.status-needs_human { color: #e5bd78; border-color: rgba(229,189,120,.2); background: rgba(229,189,120,.08); }
+.api-token-config { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; padding: 14px 0; border-bottom: 1px solid var(--line); }
+.api-token-config .field { width: 100%; }
+.api-token-config .secondary-button { min-height: 34px; }
+.api-token-config p { margin: 0; color: #78839a; font-size: 8px; line-height: 1.55; }
+
 .status-awaiting_app { color: #e5bd78; border-color: rgba(229,189,120,.18); background: rgba(229,189,120,.08); }
 
 .choice-chips { display: flex; flex-wrap: wrap; gap: 8px; }

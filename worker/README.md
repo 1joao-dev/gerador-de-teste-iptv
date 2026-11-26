@@ -7,9 +7,9 @@ Serviço Node.js persistente que executa Chromium com Playwright para conduzir o
 1. Recebe nome, WhatsApp, dispositivo e marca do IPTV Flow.
 2. Abre a página pública da FUTEX em um navegador Playwright.
 3. Preenche o atendimento e escolhe as opções correspondentes.
-4. Aguarda a indicação do aplicativo e mantém a sessão aberta.
-5. Recebe a confirmação de instalação pelo painel.
-6. Continua o atendimento, captura o bloco final e entrega os campos de acesso como uma lista dinâmica.
+4. Aguarda a indicação do aplicativo.
+5. Se a preferência `autoConfirmInstall` estiver ativada no IPTV Flow, confirma a etapa automaticamente; caso contrário, aguarda a confirmação feita dentro do app.
+6. Captura o bloco final e entrega os campos de acesso como uma lista dinâmica.
 7. Salva o histórico no diretório persistente configurado em `DATA_DIR`.
 
 A automação não tenta resolver CAPTCHA, contornar bloqueios, autenticação, limites ou controles do site. Se a FUTEX alterar o fluxo ou exigir uma ação manual, a solicitação deve parar e sinalizar isso no painel.
@@ -50,7 +50,7 @@ Com o worker iniciado, abra o IPTV Flow e vá a **Configurações → Diagnostic
 - textos visíveis;
 - campos, botões e controles detectados.
 
-Use o resultado para validar os seletores antes de habilitar a automação. A página pode não expor o atendimento até que o próprio usuário abra o widget.
+Use o resultado para validar os seletores antes de habilitar a automação. O usuário final não precisa abrir a FUTEX: toda a navegação ocorre dentro do Chromium do worker. A página pode não expor o atendimento até que o próprio usuário abra o widget.
 
 ## Variáveis de ambiente do worker
 
@@ -70,6 +70,10 @@ Use o resultado para validar os seletores antes de habilitar a automação. A p�
 | `MAX_SESSION_MINUTES` | Não | Tempo máximo aguardando confirmação, padrão 30 |
 
 Gere duas chaves independentes com `openssl rand -hex 32`: uma para `API_TOKEN` (use o mesmo valor em `WORKER_API_TOKEN` na Vercel) e outra para `DATA_ENCRYPTION_KEY`. A chave de criptografia protege nome, telefone e credenciais no arquivo `jobs.json`. Guarde-a com segurança e nunca a troque enquanto houver dados salvos. Na Vercel, gere `APP_ACCESS_CODE` com `openssl rand -hex 16` e informe esse código uma vez em Configurações no painel.
+
+## Confirmação automática de instalação
+
+O painel pode enviar `autoConfirmInstall: true` ao criar uma solicitação. Quando a FUTEX pergunta se o aplicativo indicado foi instalado, o worker seleciona a opção afirmativa automaticamente e aguarda as credenciais. O padrão é desativado. A preferência é configurada no próprio IPTV Flow e só deve ser ativada se a resposta afirmativa corresponder ao uso real. Quando desativada, a pergunta aparece dentro do painel e não exige abrir a FUTEX.
 
 ## Endpoints
 

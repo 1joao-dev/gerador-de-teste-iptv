@@ -20,8 +20,8 @@ export default async function handler(req, res) {
   const appAccessCode = process.env.APP_ACCESS_CODE || "";
   const providedCodeHeader = req.headers["x-app-access-code"];
   const providedCode = Array.isArray(providedCodeHeader) ? providedCodeHeader[0] : providedCodeHeader || "";
-  if (!appAccessCode) {
-    return res.status(503).json({ message: "O acesso ao painel ainda não foi configurado. Defina APP_ACCESS_CODE na Vercel." });
+  if (appAccessCode.length < 32) {
+    return res.status(503).json({ message: "Configure APP_ACCESS_CODE na Vercel com pelo menos 32 caracteres aleatórios." });
   }
   const expectedCodeBuffer = Buffer.from(appAccessCode);
   const providedCodeBuffer = Buffer.from(String(providedCode));

@@ -1,9 +1,13 @@
 import crypto from "node:crypto";
 
+const PRIVATE_FIELDS = ["customerName", "contact", "accessDetails", "username", "password", "code"];
+
 export function createDataEncryptionKey(rawKey, production = false) {
   const value = String(rawKey || "").trim();
   if (!value) {
-    if (production) throw new Error("Defina DATA_ENCRYPTION_KEY com 64 caracteres hexadecimais antes de iniciar o worker em produção.");
+    if (production) {
+      throw new Error("Defina DATA_ENCRYPTION_KEY com 64 caracteres hexadecimais antes de iniciar o worker em produção.");
+    }
     return null;
   }
   if (!/^[a-f0-9]{64}$/i.test(value)) {
@@ -13,21 +17,19 @@ export function createDataEncryptionKey(rawKey, production = false) {
 }
 
 export function protectJobForStorage(job, key) {
-  if (job.privateDataEncrypted) return job;
+  const hasPrivateFields = PRIVATE_FIELDS.some((field) => Object.hasOwn(job, field));
+  if (job.privateDataEncrypted && !hasPrivateFields) return job;
 
-  const {
-    customerName,
-    contact,
-    accessDetails,
-    privateDataEncrypted,
-    ...publicFields
-  } = job;
+  const publicFields = { ...job };
+  delete publicFields.privateDataEncrypted;
 
-  const privateData = {
-    ...(customerName !== undefined ? { customerName } : {}),
-    ...(contact !== undefined ? { contact } : {}),
-    ...(accessDetails !== undefined ? { accessDetails } : {}),
-  };
+  const privateData = {};
+  for (const field of PRIVATE_FIELDS) {
+    if (Object.hasOwn(publicFields, field)) {
+      privateData[field] = publicFields[field];
+      delete publicFields[field];
+    }
+  }
 
   if (!key || Object.keys(privateData).length === 0) {
     return { ...publicFields, ...privateData };
@@ -53,7 +55,9 @@ export function protectJobForStorage(job, key) {
 
 export function restoreJobFromStorage(job, key) {
   if (!job.privateDataEncrypted) return job;
-  if (!key) throw new Error("DATA_ENCRYPTION_KEY não está disponível para descriptografar os dados privados.");
+  if (!key) {
+    throw new Error("DATA_ENCRYPTION_KEY não está disponível para descriptografar os dados privados.");
+  }
 
   const payload = job.privateDataEncrypted;
   if (payload.version !== 1 || !payload.iv || !payload.tag || !payload.data) {
@@ -71,9 +75,10 @@ export function restoreJobFromStorage(job, key) {
     decipher.final(),
   ]);
   const privateData = JSON.parse(decrypted.toString("utf8"));
+  const { privateDataEncrypted, ...publicFields } = job;
 
   return {
-    ...job,
+    ...publicFields,
     ...privateData,
   };
 }

@@ -36,8 +36,8 @@ const maxSessionAgeMs = Math.max(5, Number(process.env.MAX_SESSION_MINUTES || 30
 let lastRequestAt = 0;
 let persistenceQueue = Promise.resolve();
 
-if (process.env.NODE_ENV === "production" && !apiToken) {
-  throw new Error("Defina API_TOKEN antes de iniciar o worker em produção.");
+if (process.env.NODE_ENV === "production" && apiToken.length < 32) {
+  throw new Error("Defina API_TOKEN com pelo menos 32 caracteres aleatórios antes de iniciar o worker em produção.");
 }
 
 function safeJob(job) {

@@ -88,8 +88,9 @@ O usuário final vê apenas a interface própria do IPTV Flow. O site da FUTEX �
 - `GET /health`: health check público de liveness usado pelo Railway.
 - `GET /api/health`: estado autenticado do serviço e da automação.
 - `GET /api/diagnostics/futex`: diagnóstico de leitura do site, sem enviar formulários.
-- `POST /api/test-requests`: inicia uma sessão manual com `{ "manualChat": true }`.
+- `POST /api/test-requests`: inicia uma solicitação com `{ "customerName", "contact", "device", "brand" }`.
 - `GET /api/test-requests`: lista o histórico persistido.
+- `GET /api/test-requests/:id`: consulta o andamento e o resultado de uma solicitação.
 - `POST /api/test-requests/:id/app-confirmation`: recebe `{ "installed": true | false }` e responde imediatamente; o painel acompanha o processamento por polling.
 
 Todas as rotas `/api` exigem `Authorization: Bearer <API_TOKEN>` em produção. A rota pública `/health` retorna apenas que o processo está vivo; os detalhes operacionais ficam em `/api/health`.

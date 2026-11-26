@@ -41,8 +41,8 @@ async function waitForText(page, expression, timeout = 25_000) {
 
 async function clickChoice(page, label) {
   const candidates = [
-    page.getByRole("button", { name: new RegExp("^\\s*" + escapeRegExp(label) + "\\s*$", "i") }),
-    page.getByText(new RegExp("^\\s*" + escapeRegExp(label) + "\\s*$", "i")),
+    page.getByRole("button", { name: new RegExp("^\s*" + escapeRegExp(label) + "\s*$", "i") }),
+    page.getByText(new RegExp("^\s*" + escapeRegExp(label) + "\s*$", "i")),
   ];
 
   for (const candidate of candidates) {
@@ -71,9 +71,9 @@ async function sendChatMessage(page, message) {
 
 function extractRecommendedApp(text) {
   const patterns = [
-    /aplicativo indicado é o?\\s*([^.!\\n]+)/i,
-    /aplicativo recomendado é o?\\s*([^.!\\n]+)/i,
-    /instale o\\s+([^.!\\n]+?)\\s+na sua tv/i,
+    /aplicativo indicado é o?\s*([^.!\n]+)/i,
+    /aplicativo recomendado é o?\s*([^.!\n]+)/i,
+    /instale o\s+([^.!\n]+?)\s+na sua tv/i,
   ];
   for (const pattern of patterns) {
     const match = text.match(pattern);
@@ -83,7 +83,7 @@ function extractRecommendedApp(text) {
 }
 
 function extractDuration(text) {
-  const match = text.match(/duração de\\s+([\\w., ]+?)(?:[.!\\n]|$)/i);
+  const match = text.match(/duração de\s+([\w., ]+?)(?:[.!\n]|$)/i);
   return match?.[1]?.trim() || undefined;
 }
 
@@ -92,12 +92,12 @@ function extractAccessDetails(text) {
   if (marker < 0) return [];
 
   const tail = text.slice(marker).split(/pronto!|seu teste já está ativo/i)[0];
-  const lines = tail.split(/\\r?\\n/).map((line) => line.trim()).filter(Boolean);
+  const lines = tail.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
   const details = [];
 
   for (const line of lines) {
-    const clean = line.replace(/^[🔑✅☑️📌\\s]+/u, "");
-    const match = clean.match(/^([^:]{2,64}):\\s*(.+)$/);
+    const clean = line.replace(/^[🔑✅☑️📌\s]+/u, "");
+    const match = clean.match(/^([^:]{2,64}):\s*(.+)$/);
     if (!match) continue;
 
     const label = match[1].trim();
@@ -112,7 +112,7 @@ function extractResult(text) {
   const accessDetails = extractAccessDetails(text);
   if (accessDetails.length === 0) return undefined;
 
-  const activeMatch = text.match(/pronto!\\s*seu teste já está ativo[^\\n]*/i);
+  const activeMatch = text.match(/pronto!\s*seu teste já está ativo[^\n]*/i);
   const message = activeMatch?.[0]?.trim();
   return {
     status: "completed",
@@ -193,15 +193,16 @@ export async function startFutexSession(payload) {
     await sendChatMessage(page, payload.customerName);
 
     await waitForText(page, /whatsapp com ddd|número.*whatsapp|seu whatsapp/i, 25_000);
-    await sendChatMessage(page, payload.contact.replace(/\\D/g, ""));
+    await sendChatMessage(page, payload.contact.replace(/\D/g, ""));
 
     await waitForText(page, /onde você vai assistir|onde vai assistir/i, 25_000);
     await clickChoice(page, payload.device);
 
     await waitForText(page, /qual é a marca|marca da sua tv|marca do aparelho/i, 25_000);
-    if (payload.brandOther) {
+    const knownBrands = ["Samsung", "LG", "TCL", "Sony", "Philips", "Panasonic", "Philco", "AOC", "Roku"];
+    if (!knownBrands.includes(payload.brand)) {
       await clickChoice(page, "Outra (digitar)");
-      await sendChatMessage(page.brandOther);
+      await sendChatMessage(page, payload.brand);
     } else {
       await clickChoice(page, payload.brand);
     }

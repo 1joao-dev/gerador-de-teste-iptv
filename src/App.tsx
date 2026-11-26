@@ -15,6 +15,11 @@ import {
   Gauge,
   History,
   LayoutDashboard,
+  Smartphone,
+  Tablet,
+  Laptop,
+  Gamepad2,
+  Box,
   LifeBuoy,
   LoaderCircle,
   LockKeyhole,
@@ -38,7 +43,6 @@ type Page = "overview" | "new" | "history" | "settings";
 type RequestStatus = "draft" | "queued" | "running" | "awaiting_app" | "needs_human" | "completed" | "failed";
 
 type AccessDetail = { label: string; value: string };
-type FutexChatMessage = { id: string; role: "user" | "assistant"; text: string };
 
 type TestRequest = {
   id: string;
@@ -57,16 +61,53 @@ type TestRequest = {
   recommendedApp?: string;
   appGuideUrl?: string;
   appInstalled?: boolean;
-  autoConfirmInstall?: boolean;
-  manualChat?: boolean;
-  chatMessages?: FutexChatMessage[];
-  chatOptions?: string[];
-  chatInputPlaceholder?: string;
-  chatCanSend?: boolean;
   message?: string;
 };
 
 const APP_ACCESS_CODE_STORAGE_KEY = "iptv-flow-app-access-code-v1";
+
+const DEVICE_OPTIONS = [
+  { value: "Smart TV", detail: "Samsung, LG e outras", icon: Tv },
+  { value: "Android TV", detail: "TV com Android", icon: Monitor },
+  { value: "Roku TV", detail: "Sistema Roku", icon: Tv },
+  { value: "TV Box", detail: "Box Android", icon: Box },
+  { value: "Celular Android", detail: "Smartphone Android", icon: Smartphone },
+  { value: "iPhone / iPad", detail: "Apple iOS / iPadOS", icon: Tablet },
+  { value: "Computador", detail: "PC ou notebook", icon: Laptop },
+  { value: "Fire Stick", detail: "Amazon Fire TV", icon: RadioTower },
+  { value: "Xbox", detail: "Console Xbox", icon: Gamepad2 },
+  { value: "XCIPTV", detail: "Aplicativo XCIPTV", icon: Monitor },
+  { value: "IPTV Smarters", detail: "Smarters Player", icon: Monitor },
+  { value: "Lista M3U", detail: "Player compatível", icon: FileClock },
+  { value: "SS IPTV", detail: "Aplicativo SS IPTV", icon: Monitor },
+  { value: "Duplecast", detail: "Aplicativo Duplecast", icon: Monitor },
+] as const;
+
+const BRAND_OPTIONS = ["Samsung", "LG", "TCL", "Sony", "Philips", "Panasonic", "Philco", "AOC", "Roku", "Outra"];
+
+function FlowMark({ size = 32 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 48 48" fill="none" aria-hidden="true">
+      <defs>
+        <linearGradient id="flow-mark-gradient" x1="7" y1="7" x2="42" y2="41" gradientUnits="userSpaceOnUse">
+          <stop stopColor="#C04DFF" />
+          <stop offset=".52" stopColor="#853BFF" />
+          <stop offset="1" stopColor="#00B9F2" />
+        </linearGradient>
+      </defs>
+      <path d="M15.1 5.9 38.2 19.2c4.2 2.4 4.2 7.2 0 9.6L15.1 42.1C10.8 44.6 6 42.1 6 37.2V10.8c0-4.9 4.8-7.4 9.1-4.9Z" fill="url(#flow-mark-gradient)" />
+      <path d="m19 16.2 12.4 7.1c.7.4.7 1.1 0 1.5L19 31.9c-.8.5-1.7 0-1.7-.9V17.1c0-.9.9-1.4 1.7-.9Z" fill="#120D20" />
+      <path d="M12 7.4c-2.5 1.2-3.7 3.2-3.7 6v21.2c0 3.1 1.6 5.2 4.1 6" stroke="#E8D9FF" strokeOpacity=".35" strokeWidth="1.2" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function formatPhone(value: string) {
+  const digits = value.replace(/\\D/g, "").slice(0, 11);
+  if (digits.length <= 2) return digits ? "(" + digits : "";
+  if (digits.length <= 7) return "(" + digits.slice(0, 2) + ") " + digits.slice(2);
+  return "(" + digits.slice(0, 2) + ") " + digits.slice(2, 7) + "-" + digits.slice(7);
+}
 
 function formatDate(value: string) {
   return new Intl.DateTimeFormat("pt-BR", {
@@ -133,13 +174,12 @@ function App() {
   const [workerHealth, setWorkerHealth] = useState<"checking" | "online" | "offline">("checking");
   const [appAccessCode, setAppAccessCode] = useState("");
   const [appAccessCodeDraft, setAppAccessCodeDraft] = useState("");
-  const [chatDraft, setChatDraft] = useState("");
-  const [sendingChat, setSendingChat] = useState(false);
   const [workerAutomationEnabled, setWorkerAutomationEnabled] = useState(false);
   const [diagnosingFutex, setDiagnosingFutex] = useState(false);
   const [futexDiagnostic, setFutexDiagnostic] = useState("");
   const [flowRequest, setFlowRequest] = useState<TestRequest | null>(null);
-  const [flowStage, setFlowStage] = useState<"form" | "chat" | "install" | "waiting" | "result">("form");
+  const [flowStage, setFlowStage] = useState<"form" | "install" | "waiting" | "result">("form");
+  const [form, setForm] = useState({ customerName: "", contact: "", device: "", brand: "", brandOther: "" });
 
   useEffect(() => {
     try {
@@ -175,7 +215,6 @@ function App() {
   }), [requests]);
 
   const automationReady = workerHealth === "online" && workerAutomationEnabled;
-  const chatPending = sendingChat || flowRequest?.message?.startsWith("Enviando sua resposta") === true;
 
   const filteredRequests = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
@@ -242,74 +281,56 @@ function App() {
     }
   }
 
-  async function submitRequest(event?: FormEvent<HTMLFormElement>) {
-    event?.preventDefault();
+
+  function updateForm(field: keyof typeof form, value: string) {
+    setForm((current) => ({
+      ...current,
+      [field]: field === "contact" ? formatPhone(value) : value,
+    }));
+  }
+
+  async function submitRequest(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const customerName = form.customerName.trim();
+    const contact = form.contact.trim();
+    const phoneDigits = contact.replace(/\\D/g, "");
+    const device = form.device;
+    const brand = form.brand === "Outra" ? form.brandOther.trim() : form.brand;
+
+    if (customerName.length < 2) { setToast("Informe seu nome para continuar."); return; }
+    if (phoneDigits.length < 10 || phoneDigits.length > 11) { setToast("Informe um WhatsApp válido com DDD."); return; }
+    if (!device) { setToast("Selecione onde você vai assistir."); return; }
+    if (!brand) { setToast("Selecione a marca do aparelho."); return; }
     if (!automationReady) {
       setToast(workerHealth === "offline" ? "Worker offline. Verifique o servidor de automação." : "A automação ainda não está ativa no servidor.");
       return;
     }
-    if (!API_BASE_URL) {
-      setToast("Configure a conexão com o worker para abrir o atendimento.");
-      return;
-    }
+    if (!API_BASE_URL) { setToast("Configure a conexão com o worker para gerar o teste."); return; }
 
     setSubmitting(true);
     try {
       const response = await apiRequest("/api/test-requests", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ manualChat: true }),
+        body: JSON.stringify({ customerName, contact, device, brand }),
       });
       const result = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(result.message || "Não foi possível abrir o atendimento FUTEX.");
+      if (!response.ok) throw new Error(result.message || "Não foi possível iniciar a geração do teste.");
       const request: TestRequest = {
         id: result.id ?? makeId(),
-        customerName: result.customerName || "Atendimento FUTEX",
-        contact: result.contact || "",
-        device: result.device || "A definir no atendimento",
-        brand: result.brand || "A definir no atendimento",
-        manualChat: true,
+        customerName, contact, device, brand,
         status: result.status || "queued",
         createdAt: result.createdAt || new Date().toISOString(),
-        chatMessages: result.chatMessages || [],
-        chatOptions: result.chatOptions || [],
-        chatInputPlaceholder: result.chatInputPlaceholder || "Digite sua resposta...",
-        message: result.message || "Abrindo o atendimento FUTEX.",
+        message: result.message || "Solicitação recebida. Conectando ao sistema FUTEX.",
       };
       setRequests((current) => [request, ...current]);
       setFlowRequest(request);
-      setChatDraft("");
-      setFlowStage("chat");
-      setToast("Atendimento aberto. Você pode conversar com a FUTEX aqui no app.");
+      setFlowStage("waiting");
+      setToast("Solicitação enviada. O IPTV Flow está processando seu teste.");
     } catch (error) {
-      setToast(error instanceof Error ? error.message : "Falha ao abrir o atendimento.");
+      setToast(error instanceof Error ? error.message : "Falha ao iniciar a solicitação.");
     } finally {
       setSubmitting(false);
-    }
-  }
-
-  async function sendChatReply(message = chatDraft, option?: string) {
-    if (!flowRequest || !flowRequest.manualChat || chatPending) return;
-    const text = message.trim();
-    if (!option && !text) return;
-    setSendingChat(true);
-    try {
-      const response = await apiRequest("/api/test-requests/" + encodeURIComponent(flowRequest.id) + "/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(option ? { option } : { message: text }),
-      });
-      const result = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(result.message || "Não foi possível enviar sua resposta.");
-      const updated: TestRequest = { ...flowRequest, ...result, manualChat: true };
-      setFlowRequest(updated);
-      setRequests((current) => current.map((item) => item.id === updated.id ? updated : item));
-      setChatDraft("");
-      setFlowStage("chat");
-    } catch (error) {
-      setToast(error instanceof Error ? error.message : "Falha ao enviar resposta.");
-    } finally {
-      setSendingChat(false);
     }
   }
 
@@ -367,7 +388,6 @@ function App() {
       setFlowRequest(updated);
       setRequests((current) => current.map((item) => item.id === updated.id ? updated : item));
       if (hasTestResult(updated)) setFlowStage("result");
-      else if (updated.manualChat && ["queued", "running"].includes(updated.status)) setFlowStage("chat");
       else if (updated.status === "awaiting_app" && updated.recommendedApp && updated.appInstalled !== true) setFlowStage("install");
       else setFlowStage("waiting");
       if (!silent) setToast("Status atualizado.");
@@ -379,8 +399,8 @@ function App() {
   }
 
   useEffect(() => {
-    if (!API_BASE_URL || !flowRequest || !["chat", "waiting", "install"].includes(flowStage) || !["queued", "running", "awaiting_app"].includes(flowRequest.status)) return;
-    const interval = window.setInterval(() => { void refreshFlowRequest(true); }, flowStage === "chat" ? 4_000 : 5_000);
+    if (!API_BASE_URL || !flowRequest || !["waiting", "install"].includes(flowStage) || !["queued", "running", "awaiting_app"].includes(flowRequest.status)) return;
+    const interval = window.setInterval(() => { void refreshFlowRequest(true); }, 5_000);
     return () => window.clearInterval(interval);
   }, [flowRequest?.id, flowRequest?.status, flowStage]);
 
@@ -416,7 +436,7 @@ function App() {
 
   function resumeRequest(request: TestRequest) {
     setFlowRequest(request);
-    setFlowStage(hasTestResult(request) ? "result" : request.manualChat && ["queued", "running"].includes(request.status) ? "chat" : request.status === "awaiting_app" ? "install" : "waiting");
+    setFlowStage(hasTestResult(request) ? "result" : request.status === "awaiting_app" ? "install" : "waiting");
     setSelectedRequest(null);
     setPage("new");
   }
@@ -451,10 +471,10 @@ function App() {
     <div className="app-shell">
       <aside className={"sidebar " + (mobileMenuOpen ? "sidebar-open" : "")}>
         <div className="brand-lockup">
-          <div className="brand-mark"><Zap size={21} fill="currentColor" /></div>
+          <div className="brand-mark"><FlowMark size={31} /></div>
           <div>
-            <strong>IPTV<span>FLOW</span></strong>
-            <small>CONTROL CENTER</small>
+            <strong>IPTV<span>Flow</span></strong>
+            <small>SMART TEST EXPERIENCE</small>
           </div>
           <button className="mobile-close icon-button" onClick={() => setMobileMenuOpen(false)} aria-label="Fechar menu"><X size={19} /></button>
         </div>
@@ -517,27 +537,27 @@ function App() {
           {page === "overview" && (
             <section className="page-section">
               <div className="page-heading">
-                <div><div className="eyebrow"><Sparkles size={13} /> CENTRAL DE OPERAÇÕES</div><h1>Visão geral</h1><p>Acompanhe suas solicitações e o status da automação em um só lugar.</p></div>
+                <div><div className="eyebrow"><Sparkles size={13} /> CENTRAL DE OPERAÇÕES</div><h1>Visão geral</h1><p>Gere, acompanhe e organize seus testes em uma experiência simples.</p></div>
                 <button className="primary-button" onClick={() => navigate("new")}><Plus size={17} /> Novo teste</button>
               </div>
 
               <div className="hero-panel">
                 <div className="hero-copy">
                   <div className="hero-tag"><span /> PAINEL DE CONTROLE</div>
-                  <h2>Sua operação,<br /><em>em outro nível.</em></h2>
-                  <p>Organize solicitações, acompanhe processos e centralize seus testes em uma experiência simples.</p>
-                  <button className="hero-button" onClick={() => navigate("new")}>Começar agora <ArrowRight size={16} /></button>
+                  <h2>Seu teste IPTV,<br /><em>sem complicação.</em></h2>
+                  <p>Informe os dados uma única vez. O IPTV Flow utiliza o sistema FUTEX em segundo plano e organiza o resultado para você.</p>
+                  <button className="hero-button" onClick={() => navigate("new")}>Gerar meu teste <ArrowRight size={16} /></button>
                 </div>
                 <div className="hero-visual" aria-hidden="true">
                   <div className="hero-orbit orbit-one" /><div className="hero-orbit orbit-two" />
-                  <div className="hero-core"><Zap size={36} fill="currentColor" /></div>
-                  <div className="floating-chip chip-top"><Activity size={14} /> Automação</div>
-                  <div className="floating-chip chip-bottom"><ShieldCheck size={14} /> Controle centralizado</div>
+                  <div className="hero-core"><FlowMark size={54} /></div>
+                  <div className="floating-chip chip-top"><Activity size={14} /> FUTEX em segundo plano</div>
+                  <div className="floating-chip chip-bottom"><ShieldCheck size={14} /> Dados prontos para copiar</div>
                   <div className="hero-glow" />
                 </div>
               </div>
 
-              <div className="section-title-row"><div><h3>Indicadores</h3><p>Resumo das solicitações registradas neste dispositivo</p></div><span className="period-label"><Clock3 size={13} /> Desde o início</span></div>
+              <div className="section-title-row"><div><h3>Indicadores</h3><p>Resumo dos testes realizados pelo IPTV Flow</p></div><span className="period-label"><Clock3 size={13} /> Desde o início</span></div>
               <div className="stats-grid">
                 <article className="stat-card"><div className="stat-top"><span className="stat-icon violet"><FileClock size={18} /></span><span className="stat-trend neutral">Total</span></div><strong>{stats.total}</strong><p>Solicitações registradas</p><div className="stat-foot"><span className="stat-line violet-line" /><small>Todos os registros locais</small></div></article>
                 <article className="stat-card"><div className="stat-top"><span className="stat-icon amber"><Clock3 size={18} /></span><span className="stat-trend neutral">Fila</span></div><strong>{stats.queued}</strong><p>Aguardando processamento</p><div className="stat-foot"><span className="stat-line amber-line" /><small>Inclui rascunhos locais</small></div></article>
@@ -547,7 +567,7 @@ function App() {
 
               <div className="dashboard-grid">
                 <section className="panel recent-panel">
-                  <div className="panel-heading"><div><h3>Atividade recente</h3><p>Últimas solicitações registradas</p></div><button className="text-button" onClick={() => navigate("history")}>Ver histórico <ArrowRight size={14} /></button></div>
+                  <div className="panel-heading"><div><h3>Atividade recente</h3><p>Seus testes mais recentes</p></div><button className="text-button" onClick={() => navigate("history")}>Ver histórico <ArrowRight size={14} /></button></div>
                   {requests.length === 0 ? (
                     <div className="empty-state"><div className="empty-icon"><FileClock size={22} /></div><strong>Nenhuma atividade por aqui</strong><p>Quando você criar uma solicitação, ela aparecerá nesta lista.</p><button className="secondary-button" onClick={() => navigate("new")}><Plus size={15} /> Criar primeira solicitação</button></div>
                   ) : (
@@ -583,44 +603,54 @@ function App() {
           {page === "new" && (
             <section className="page-section">
               <div className="page-heading">
-                <div><div className="eyebrow"><Zap size={13} /> NOVO ATENDIMENTO</div><h1>Atendimento FUTEX</h1><p>Converse com o chatbot sem sair do IPTV Flow.</p></div>
+                <div><div className="eyebrow"><Zap size={13} /> NOVO TESTE</div><h1>Gerar teste</h1><p>Preencha os dados abaixo e receba o resultado aqui mesmo.</p></div>
                 <button className="back-button" onClick={() => navigate("overview")}>Voltar ao painel</button>
               </div>
               <div className="new-test-layout">
                 {flowStage === "form" ? (
-                  <section className="panel request-form futex-start-card">
-                    <div className="form-section-heading"><span className="step-number">01</span><div><h3>Iniciar atendimento</h3><p>O chatbot oficial da FUTEX será carregado dentro desta tela.</p></div></div>
-                    <div className="futex-start-illustration"><span><RadioTower size={28} /></span><div><strong>Teste grátis de 6 horas</strong><small>Você responde manualmente às perguntas da FUTEX, como faria no site original.</small></div></div>
-                    <ul className="futex-start-list">
-                      <li><CheckCircle2 size={15} /> Digite nome, WhatsApp, dispositivo e marca no chat.</li>
-                      <li><CheckCircle2 size={15} /> Acompanhe as mensagens e responda pelo IPTV Flow.</li>
-                      <li><CheckCircle2 size={15} /> Quando o teste for gerado, o app organiza os dados para copiar.</li>
-                    </ul>
-                    <div className="form-actions"><span><LockKeyhole size={13} /> {automationReady ? "Conexão segura com o atendimento." : workerHealth === "checking" ? "Verificando o servidor..." : workerHealth === "offline" ? "Worker offline. Confira a implantação." : "Worker online, mas a automação está desativada."}</span><button className="primary-button" type="button" onClick={() => void submitRequest()} disabled={submitting || !automationReady}>{submitting ? <LoaderCircle className="spin" size={16} /> : <Zap size={16} />}{submitting ? "Abrindo..." : "Abrir atendimento"}<ArrowRight size={15} /></button></div>
+                  <section className="panel request-form flow-form-panel">
+                    <form onSubmit={submitRequest}>
+                      <div className="form-section-heading"><span className="step-number">01</span><div><h3>Seus dados</h3><p>Precisamos dessas informações para solicitar seu teste.</p></div></div>
+                      <div className="form-grid two-columns">
+                        <label className="field"><span>Nome completo</span><input value={form.customerName} onChange={(event) => updateForm("customerName", event.target.value)} placeholder="Como podemos te chamar?" autoComplete="name" maxLength={100} required /></label>
+                        <label className="field"><span>WhatsApp com DDD</span><input type="tel" inputMode="tel" value={form.contact} onChange={(event) => updateForm("contact", event.target.value)} placeholder="(11) 99999-9999" autoComplete="tel" maxLength={16} required /></label>
+                      </div>
+                      <div className="form-separator" />
+                      <div className="form-section-heading"><span className="step-number">02</span><div><h3>Onde você vai assistir?</h3><p>Escolha o aparelho ou aplicativo que pretende utilizar.</p></div></div>
+                      <div className="device-grid flow-device-grid">
+                        {DEVICE_OPTIONS.map((option) => {
+                          const Icon = option.icon;
+                          return <button type="button" key={option.value} className={"device-option " + (form.device === option.value ? "selected" : "")} onClick={() => updateForm("device", option.value)} aria-pressed={form.device === option.value}>
+                            <span className="device-icon"><Icon size={18} /></span>
+                            <strong>{option.value}</strong>
+                            <small>{option.detail}</small>
+                            {form.device === option.value && <span className="selected-check"><Check size={11} /></span>}
+                          </button>;
+                        })}
+                      </div>
+                      <div className="form-separator" />
+                      <div className="form-section-heading"><span className="step-number">03</span><div><h3>Marca do aparelho</h3><p>Selecione a marca para receber a indicação correta.</p></div></div>
+                      <div className="brand-grid">
+                        {BRAND_OPTIONS.map((brand) => <button type="button" key={brand} className={"brand-option " + (form.brand === brand ? "selected" : "")} onClick={() => { updateForm("brand", brand); if (brand !== "Outra") updateForm("brandOther", ""); }} aria-pressed={form.brand === brand}>
+                          {brand === "Outra" ? <Plus size={14} /> : <span className="brand-option-dot" />}
+                          {brand}
+                          {form.brand === brand && <Check size={13} />}
+                        </button>)}
+                      </div>
+                      {form.brand === "Outra" && <label className="field other-brand-field"><span>Digite a marca</span><input value={form.brandOther} onChange={(event) => updateForm("brandOther", event.target.value)} placeholder="Ex.: Hisense, Toshiba..." maxLength={60} required /></label>}
+                      <div className="form-submit-footer">
+                        <div className="form-trust-note"><ShieldCheck size={16} /><span><strong>Seus dados protegidos</strong><small>O teste é solicitado diretamente ao sistema FUTEX.</small></span></div>
+                        <button className="primary-button generate-button" type="submit" disabled={submitting || !automationReady}>
+                          {submitting ? <LoaderCircle className="spin" size={17} /> : <Zap size={17} />}
+                          {submitting ? "Enviando solicitação..." : "Gerar teste grátis"}
+                          {!submitting && <ArrowRight size={16} />}
+                        </button>
+                      </div>
+                      {!automationReady && <p className="form-availability-note">{workerHealth === "checking" ? "Verificando conexão com o serviço..." : workerHealth === "offline" ? "Serviço temporariamente indisponível. Tente novamente mais tarde." : "A geração será liberada quando a integração estiver ativa."}</p>}
+                    </form>
                   </section>
-                ) : (
+                : (
                   <section className="panel flow-state-panel">
-                    {flowStage === "chat" && flowRequest && (
-                      <section className="futex-chat-shell">
-                        <div className="futex-chat-topline"><span><i className="green-dot" /> {flowRequest.status === "queued" ? "Conectando à FUTEX" : "Atendimento conectado"}</span><button className="text-button" type="button" onClick={() => void refreshFlowRequest()} disabled={refreshingFlow}>{refreshingFlow ? <LoaderCircle size={13} className="spin" /> : <RefreshCw size={13} />} Atualizar</button></div>
-                        <div className="futex-chat-messages" role="log" aria-live="polite">
-                          {(flowRequest.chatMessages || []).map((message, index) => (
-                            <div className={"futex-chat-message " + (message.role === "user" ? "from-user" : "from-bot")} key={message.id || index}>
-                              <span>{message.role === "user" ? "Você" : "FUTEX"}</span>
-                              <p>{message.text}</p>
-                            </div>
-                          ))}
-                          {(!flowRequest.chatMessages || flowRequest.chatMessages.length === 0) && <div className="chat-loading"><LoaderCircle size={18} className="spin" /> Carregando conversa da FUTEX...</div>}
-                          {flowRequest.status === "running" && chatPending && <div className="chat-typing">FUTEX está respondendo...</div>}
-                        </div>
-                        {(flowRequest.chatOptions || []).length > 0 && <div className="futex-chat-options">{flowRequest.chatOptions?.map((option) => <button type="button" className="choice-chip" key={option} disabled={chatPending} onClick={() => void sendChatReply("", option)}>{option}</button>)}</div>}
-                        <form className="futex-chat-composer" onSubmit={(event) => { event.preventDefault(); void sendChatReply(); }}>
-                          <textarea value={chatDraft} onChange={(event) => setChatDraft(event.target.value)} placeholder={flowRequest.chatInputPlaceholder || "Digite sua resposta..."} rows={2} maxLength={1000} disabled={chatPending || flowRequest.status === "completed"} />
-                          <button className="primary-button" type="submit" disabled={chatPending || !chatDraft.trim() || flowRequest.status === "completed"} aria-label="Enviar resposta">{chatPending ? <LoaderCircle size={16} className="spin" /> : <ArrowRight size={16} />}</button>
-                        </form>
-                        <p className="futex-chat-footnote"><ShieldCheck size={13} /> A conversa acontece aqui. O site FUTEX não abre em outra aba.</p>
-                      </section>
-                    )}
                     {flowStage === "install" && flowRequest && (
                       <>
                         <div className="flow-state-heading"><span className="step-number">04</span><div><h3>Aplicativo recomendado</h3><p>Esta é a etapa de instalação mostrada pela FUTEX.</p></div><StatusPill status="awaiting_app" /></div>
@@ -647,7 +677,7 @@ function App() {
                           {getAccessDetails(flowRequest).map((detail, index) => <div className="credential-card" key={detail.label + "-" + index}><span>{detail.label}</span><strong>{detail.value}</strong><button type="button" onClick={() => void copyValue(detail.label, detail.value)}><Copy size={13} /> Copiar</button></div>)}
                         </div>
                         {getAccessDetails(flowRequest).length > 0 && <button className="primary-button copy-all-button" type="button" onClick={() => void copyResult(flowRequest)}><Copy size={15} /> Copiar todos os dados</button>}
-                        <div className="result-note"><Clock3 size={16} /><p>Seu teste foi gerado pela FUTEX em segundo plano. Os dados ficam no histórico do IPTV Flow: copie as credenciais e informe no aplicativo indicado. Não é necessário abrir o site FUTEX.</p></div>
+                        <div className="result-note"><Clock3 size={16} /><p>Seu teste foi gerado pelo sistema FUTEX. Copie as credenciais e informe no aplicativo indicado. Tudo fica organizado no histórico do IPTV Flow.</p></div>
                         <button className="back-button" type="button" onClick={() => { setFlowStage("form"); setFlowRequest(null); setPage("history"); }}>Concluir e abrir histórico</button>
                       </>
                     )}
@@ -684,7 +714,7 @@ function App() {
             <section className="page-section">
               <div className="page-heading"><div><div className="eyebrow"><Settings2 size={13} /> PREFERÊNCIAS</div><h1>Configurações</h1><p>Gerencie as conexões e os parâmetros do aplicativo.</p></div></div>
               <div className="settings-layout">
-                <section className="panel settings-panel"><div className="settings-heading"><span className="settings-icon"><RadioTower size={19} /></span><div><h3>Integração de automação</h3><p>Conexão entre o aplicativo e o serviço que processa as solicitações.</p></div><span className={"config-value " + (automationReady ? "configured" : "pending")}>{workerHealth === "checking" ? "Verificando" : automationReady ? "Ativo" : workerHealth === "online" ? "Pausado" : "Offline"}</span></div><div className="settings-row"><div><strong>Proxy seguro da aplicação</strong><small>A chave do worker permanece no servidor Vercel.</small></div><span className="config-value configured">Configurado</span></div><div className="api-token-config"><label className="field"><span>Código de acesso do painel <small>APP_ACCESS_CODE</small></span><input type="password" value={appAccessCodeDraft} onChange={(event) => setAppAccessCodeDraft(event.target.value)} placeholder="Digite o código configurado na Vercel" autoComplete="current-password" /></label><button className="secondary-button" type="button" onClick={saveAppAccessCode}><Check size={14} /> Salvar código</button><p>Use um código aleatório com pelo menos 32 caracteres, diferente do token do worker. O token interno nunca é enviado ao navegador.</p></div><div className="settings-row"><div><strong>Worker de automação</strong><small>Processador Playwright executado em servidor persistente.</small></div><span className={"config-value " + (workerHealth === "online" ? "configured" : "pending")}>{workerHealth === "checking" ? "Verificando" : workerHealth === "online" ? "Online" : "Offline"}</span></div><div className="settings-row"><div><strong>Conexão FUTEX</strong><small>O worker mantém a sessão do chatbot e captura o resultado final.</small></div><span className={"config-value " + (automationReady ? "configured" : "pending")}>{workerAutomationEnabled ? "Ativa" : "Desativada"}</span></div><div className="settings-row"><div><strong>Atendimento FUTEX pelo app</strong><small>O chatbot é exibido no IPTV Flow; você digita as respostas manualmente.</small></div><span className="config-value configured">Chat integrado</span></div>
+                <section className="panel settings-panel"><div className="settings-heading"><span className="settings-icon"><RadioTower size={19} /></span><div><h3>Integração de automação</h3><p>Conexão entre o aplicativo e o serviço que processa as solicitações.</p></div><span className={"config-value " + (automationReady ? "configured" : "pending")}>{workerHealth === "checking" ? "Verificando" : automationReady ? "Ativo" : workerHealth === "online" ? "Pausado" : "Offline"}</span></div><div className="settings-row"><div><strong>Proxy seguro da aplicação</strong><small>A chave do worker permanece no servidor Vercel.</small></div><span className="config-value configured">Configurado</span></div><div className="api-token-config"><label className="field"><span>Código de acesso do painel <small>APP_ACCESS_CODE</small></span><input type="password" value={appAccessCodeDraft} onChange={(event) => setAppAccessCodeDraft(event.target.value)} placeholder="Digite o código configurado na Vercel" autoComplete="current-password" /></label><button className="secondary-button" type="button" onClick={saveAppAccessCode}><Check size={14} /> Salvar código</button><p>Use um código aleatório com pelo menos 32 caracteres, diferente do token do worker. O token interno nunca é enviado ao navegador.</p></div><div className="settings-row"><div><strong>Worker de automação</strong><small>Processador Playwright executado em servidor persistente.</small></div><span className={"config-value " + (workerHealth === "online" ? "configured" : "pending")}>{workerHealth === "checking" ? "Verificando" : workerHealth === "online" ? "Online" : "Offline"}</span></div><div className="settings-row"><div><strong>Conexão FUTEX</strong><small>O worker usa o atendimento original da FUTEX e devolve os dados ao IPTV Flow.</small></div><span className={"config-value " + (automationReady ? "configured" : "pending")}>{workerAutomationEnabled ? "Ativa" : "Desativada"}</span></div><div className="settings-row"><div><strong>Formulário próprio + FUTEX</strong><small>O usuário preenche o formulário próprio; a FUTEX processa o teste em segundo plano.</small></div><span className="config-value configured">Integração</span></div>
 <div className="settings-callout"><LockKeyhole size={16} /><p>O código de acesso do painel fica salvo localmente neste navegador. O token interno do worker fica somente nas variáveis de ambiente dos servidores e nunca é enviado ao navegador.</p></div><button className="secondary-button" type="button" onClick={() => void checkWorkerHealth()}><RefreshCw size={14} /> Verificar conexão</button><button className="secondary-button" type="button" onClick={() => void runFutexDiagnostic()} disabled={diagnosingFutex || workerHealth !== "online"}>{diagnosingFutex ? <LoaderCircle className="spin" size={14} /> : <Activity size={14} />} {diagnosingFutex ? "Analisando site..." : "Diagnosticar FUTEX"}</button>{futexDiagnostic && <><pre className="diagnostic-output">{futexDiagnostic}</pre><button className="text-button" type="button" onClick={() => void copyValue("Diagnóstico", futexDiagnostic)}><Copy size={14} /> Copiar diagnóstico</button></>}</section>
                 <section className="panel settings-panel"><div className="settings-heading"><span className="settings-icon"><Gauge size={19} /></span><div><h3>Ambiente do aplicativo</h3><p>Informações de execução desta versão.</p></div></div><div className="settings-row"><div><strong>Interface web</strong><small>Aplicação React responsiva.</small></div><span className="config-value configured">Operacional</span></div><div className="settings-row"><div><strong>Armazenamento local</strong><small>Rascunhos salvos neste navegador.</small></div><span className="config-value configured">Ativo</span></div><div className="settings-row"><div><strong>Sincronização entre dispositivos</strong><small>Histórico persistido no volume do servidor worker.</small></div><span className="config-value configured">Preparada</span></div></section>
               </div>

@@ -1,10 +1,13 @@
 import { chromium } from "playwright";
+import { extractAccessDetails, extractDuration, extractRecommendedApp, extractResult } from "./futex-parser.js";
 
 const FUTEX_URL = process.env.FUTEX_URL || "https://futex.com.br/teste/";
 const HEADLESS = process.env.FUTEX_HEADLESS !== "false";
 const CHAT_INPUT = [
   'input[placeholder*="mensagem" i]',
   'textarea[placeholder*="mensagem" i]',
+  'input[placeholder*="digite" i]',
+  'textarea[placeholder*="digite" i]',
   '[contenteditable="true"][data-placeholder*="mensagem" i]',
   '[contenteditable="true"]',
 ].join(", ");
@@ -52,22 +55,32 @@ async function waitForText(scope, expression, timeout = 25_000) {
 
 async function clickChoice(scope, label) {
   const matcher = new RegExp(escapeRegExp(label), "i");
-  const candidates = [
-    scope.getByRole("button", { name: matcher }),
-    scope.getByText(matcher),
-  ];
+  const button = scope.getByRole("button", { name: matcher }).last();
+  if (await button.isVisible().catch(() => false) && await button.isEnabled().catch(() => false)) {
+    await button.click({ timeout: 5_000 });
+    return;
+  }
 
-  for (const candidate of candidates) {
-    const count = await candidate.count().catch(() => 0);
-    for (let index = count - 1; index >= 0; index -= 1) {
-      const item = candidate.nth(index);
-      if (await item.isVisible().catch(() => false)) {
-        await item.click({ timeout: 5_000 });
-        return;
-      }
+  const exactText = scope.getByText(matcher, { exact: true }).last();
+  if (await exactText.isVisible().catch(() => false)) {
+    await exactText.click({ timeout: 5_000 });
+    return;
+  }
+
+  throw new Error("A opção \"" + label + "\" não apareceu no atendimento da FUTEX.");
+}
+
+async function clickChoiceAny(scope, labels) {
+  let lastError;
+  for (const label of labels) {
+    try {
+      await clickChoice(scope, label);
+      return label;
+    } catch (error) {
+      lastError = error;
     }
   }
-  throw new Error("A opção \"" + label + "\" não apareceu no atendimento da FUTEX.");
+  throw lastError || new Error("Nenhuma das opções esperadas apareceu na FUTEX.");
 }
 
 function escapeRegExp(value) {
@@ -81,62 +94,6 @@ async function sendChatMessage(scope, message) {
   await input.press("Enter");
 }
 
-function extractRecommendedApp(text) {
-  const patterns = [
-    /aplicativo indicado é o?\s*([^.!\n]+)/gi,
-    /aplicativo recomendado é o?\s*([^.!\n]+)/gi,
-    /instale o\s+([^.!\n]+?)\s+na sua tv/gi,
-  ];
-  for (const pattern of patterns) {
-    const matches = [...text.matchAll(pattern)];
-    const match = matches.at(-1);
-    if (match?.[1]) return match[1].trim().replace(/[🎬📺📲]+$/u, "").trim();
-  }
-  return undefined;
-}
-
-function extractDuration(text) {
-  const match = text.match(/duração de\s+([\w., ]+?)(?:[.!\n]|$)/i);
-  return match?.[1]?.trim() || undefined;
-}
-
-function extractAccessDetails(text) {
-  const lower = text.toLowerCase();
-  const markers = ["seus dados de acesso", "dados de acesso", "acesso liberado", "dados do teste"];
-  const marker = markers.reduce((latest, item) => Math.max(latest, lower.lastIndexOf(item)), -1);
-  if (marker < 0) return [];
-
-  const tail = text.slice(marker).split(/pronto!|seu teste já está ativo/i)[0];
-  const lines = tail.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
-  const details = [];
-
-  for (const line of lines) {
-    const clean = line.replace(/^[🔑✅☑️📌\s]+/u, "");
-    const match = clean.match(/^([^:=]{2,64})[:=]\s*(.+)$/);
-    if (!match) continue;
-
-    const label = match[1].trim();
-    const value = match[2].trim();
-    if (!value || /dados de acesso/i.test(label)) continue;
-    details.push({ label, value });
-  }
-  return details;
-}
-
-function extractResult(text) {
-  const accessDetails = extractAccessDetails(text);
-  if (accessDetails.length === 0) return undefined;
-
-  const activeMatch = text.match(/pronto!\s*seu teste já está ativo[^\n]*/i);
-  const message = activeMatch?.[0]?.trim();
-  return {
-    status: "completed",
-    resultTitle: "Teste gerado com sucesso",
-    accessDetails,
-    duration: extractDuration(message || text) || "6 horas",
-    message,
-  };
-}
 
 function extractGuideUrl(scope) {
   return scope.locator("a[href]").evaluateAll((anchors) => {
@@ -216,16 +173,16 @@ export async function startFutexSession(payload) {
     await waitForText(scope, /como posso te chamar|qual é o seu nome/i, 30_000);
     await sendChatMessage(scope, payload.customerName);
 
-    await waitForText(scope, /whatsapp com ddd|número.*whatsapp|seu whatsapp/i, 25_000);
+    await waitForText(scope, /whatsapp|celular|telefone|número.*ddd/i, 25_000);
     await sendChatMessage(scope, payload.contact.replace(/\D/g, ""));
 
-    await waitForText(scope, /onde você vai assistir|onde vai assistir/i, 25_000);
+    await waitForText(scope, /onde.*assistir|qual.*dispositivo|em qual.*assistir|selecione.*dispositivo/i, 25_000);
     await clickChoice(scope, payload.device);
 
-    await waitForText(scope, /qual é a marca|marca da sua tv|marca do aparelho/i, 25_000);
+    await waitForText(scope, /marca|qual.*aparelho/i, 25_000);
     const knownBrands = ["Samsung", "LG", "TCL", "Sony", "Philips", "Panasonic", "Philco", "AOC", "Roku"];
     if (!knownBrands.includes(payload.brand)) {
-      await clickChoice(scope, "Outra (digitar)");
+      await clickChoiceAny(scope, ["Outra (digitar)", "Outra", "Outros"]);
       await sendChatMessage(scope, payload.brand);
     } else {
       await clickChoice(scope, payload.brand);
@@ -249,7 +206,7 @@ export async function continueFutexSession(session, installed) {
   const scope = session.scope || session.page;
 
   if (installed) {
-    await clickChoice(scope, "Sim, consegui");
+    await clickChoiceAny(scope, ["Sim, consegui", "Sim, consegui instalar", "Sim"]);
     try {
       const text = await waitForText(scope, /seus dados de acesso|dados do teste|acesso liberado|seu teste.*ativo|teste gerado/i, 45_000);
       const result = extractResult(text) || extractResult(await visibleText(scope));
@@ -270,7 +227,7 @@ export async function continueFutexSession(session, installed) {
   }
 
   const previousText = await visibleText(scope);
-  await clickChoice(scope, "Não consegui");
+  await clickChoiceAny(scope, ["Não consegui", "Não consegui instalar", "Não"]);
   const result = await waitForAppStep(scope, previousText);
   if (result.status === "completed") {
     await closeFutexSession(session);

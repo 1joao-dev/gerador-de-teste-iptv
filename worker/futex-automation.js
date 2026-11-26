@@ -43,7 +43,7 @@ async function visibleText(scope) {
       }
     };
     visit(document);
-    return [...new Set(parts.map((part) => part.trim()).filter(Boolean))].join("\\n");
+    return [...new Set(parts.map((part) => part.trim()).filter(Boolean))].join("\n");
   }).catch(() => scope.locator("body").innerText({ timeout: 5_000 }).catch(() => ""));
 }
 
@@ -76,7 +76,7 @@ async function waitForText(scope, expression, timeout = 25_000) {
         }
       };
       visit(document);
-      return new RegExp(source, "i").test(parts.join("\\n"));
+      return new RegExp(source, "i").test(parts.join("\n"));
     },
     expression.source,
     { timeout },

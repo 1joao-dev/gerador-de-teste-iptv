@@ -441,7 +441,14 @@ function App() {
       if (!response.ok) throw new Error("Não foi possível atualizar o histórico.");
       const data = await response.json();
       const items = Array.isArray(data) ? data : data.items;
-      if (Array.isArray(items)) setRequests(items as TestRequest[]);
+      if (Array.isArray(items)) {
+        setRequests((current) => {
+          const serverItems = items as TestRequest[];
+          const serverIds = new Set(serverItems.map((item) => item.id));
+          const localDrafts = current.filter((item) => item.status === "draft" && !serverIds.has(item.id));
+          return [...serverItems, ...localDrafts];
+        });
+      }
       if (!silent) setToast("Histórico atualizado.");
     } catch (error) {
       if (!silent) setToast(error instanceof Error ? error.message : "Erro ao atualizar histórico.");

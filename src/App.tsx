@@ -61,7 +61,6 @@ type TestRequest = {
   message?: string;
 };
 
-const STORAGE_KEY = "iptv-automator-requests-v1";
 const APP_ACCESS_CODE_STORAGE_KEY = "iptv-flow-app-access-code-v1";
 
 const devices = [
@@ -172,20 +171,15 @@ function App() {
 
   useEffect(() => {
     try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) setRequests(JSON.parse(saved) as TestRequest[]);
       const savedAccessCode = localStorage.getItem(APP_ACCESS_CODE_STORAGE_KEY) ?? "";
       setAppAccessCode(savedAccessCode);
       setAppAccessCodeDraft(savedAccessCode);
     } catch {
-      setRequests([]);
+      setAppAccessCode("");
+      setAppAccessCodeDraft("");
     }
     setLoaded(true);
   }, []);
-
-  useEffect(() => {
-    if (loaded) localStorage.setItem(STORAGE_KEY, JSON.stringify(requests));
-  }, [requests, loaded]);
 
   useEffect(() => {
     if (!loaded) return;

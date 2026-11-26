@@ -161,7 +161,7 @@ async function waitForAppStep(scope, previousText) {
   if (result) return { ...result, session: undefined };
 
   try {
-    const text = await waitForText(scope, /conseguiu instalar|aplicativo indicado|aplicativo recomendado/i, 45_000);
+    const text = await waitForText(scope, /conseguiu instalar/i, 45_000);
     const app = extractRecommendedApp(text);
     if (!/conseguiu instalar/i.test(text)) {
       throw new Error("A FUTEX não apresentou a confirmação de instalação esperada.");

@@ -25,6 +25,7 @@ test("criptografa nome, telefone e credenciais no histórico persistido", () => 
     username: "cliente01",
     password: "segredo",
     code: "CODIGO123",
+    chatMessages: [{ role: "user", text: "11999998888" }],
     status: "completed",
   };
 
@@ -37,12 +38,14 @@ test("criptografa nome, telefone e credenciais no histórico persistido", () => 
   assert.equal(stored.username, undefined);
   assert.equal(stored.password, undefined);
   assert.equal(stored.code, undefined);
+  assert.equal(stored.chatMessages, undefined);
   assert.ok(stored.privateDataEncrypted);
   assert.equal(serialized.includes("Cliente Exemplo"), false);
   assert.equal(serialized.includes("62999999999"), false);
   assert.equal(serialized.includes("cliente01"), false);
   assert.equal(serialized.includes("segredo"), false);
   assert.equal(serialized.includes("CODIGO123"), false);
+  assert.equal(serialized.includes("11999998888"), false);
 
   const restored = restoreJobFromStorage(stored, key);
   assert.equal(restored.customerName, job.customerName);
@@ -51,6 +54,7 @@ test("criptografa nome, telefone e credenciais no histórico persistido", () => 
   assert.equal(restored.username, job.username);
   assert.equal(restored.password, job.password);
   assert.equal(restored.code, job.code);
+  assert.deepEqual(restored.chatMessages, job.chatMessages);
   assert.equal(restored.privateDataEncrypted, undefined);
   assert.equal(restored.status, job.status);
 

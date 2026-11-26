@@ -62,7 +62,6 @@ type TestRequest = {
 };
 
 const STORAGE_KEY = "iptv-automator-requests-v1";
-const API_TOKEN_STORAGE_KEY = "iptv-flow-worker-token-v1";
 
 const devices = [
   { label: "Smart TV", detail: "Televisores inteligentes", icon: Tv },
@@ -154,8 +153,8 @@ function App() {
   const [submitting, setSubmitting] = useState(false);
   const [confirmingApp, setConfirmingApp] = useState(false);
   const [refreshingFlow, setRefreshingFlow] = useState(false);
-  const [apiToken, setApiToken] = useState("");
-  const [apiTokenDraft, setApiTokenDraft] = useState("");
+  const [workerHealth, setWorkerHealth] = useState<"checking" | "online" | "offline">("checking");
+  const [workerAutomationEnabled, setWorkerAutomationEnabled] = useState(false);
   const [flowRequest, setFlowRequest] = useState<TestRequest | null>(null);
   const [flowStage, setFlowStage] = useState<"form" | "install" | "waiting" | "result">("form");
   const [brandOther, setBrandOther] = useState("");
@@ -170,9 +169,6 @@ function App() {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved) setRequests(JSON.parse(saved) as TestRequest[]);
-      const savedToken = localStorage.getItem(API_TOKEN_STORAGE_KEY) ?? "";
-      setApiToken(savedToken);
-      setApiTokenDraft(savedToken);
     } catch {
       setRequests([]);
     }
@@ -182,6 +178,14 @@ function App() {
   useEffect(() => {
     if (loaded) localStorage.setItem(STORAGE_KEY, JSON.stringify(requests));
   }, [requests, loaded]);
+
+  useEffect(() => {
+    if (!loaded) return;
+    void checkWorkerHealth(true);
+    void refreshHistory(true);
+    const interval = window.setInterval(() => { void checkWorkerHealth(true); }, 30_000);
+    return () => window.clearInterval(interval);
+  }, [loaded]);
 
   useEffect(() => {
     if (!toast) return;
@@ -195,6 +199,8 @@ function App() {
     completed: requests.filter((item) => item.status === "completed").length,
     failed: requests.filter((item) => item.status === "failed").length,
   }), [requests]);
+
+  const automationReady = workerHealth === "online" && workerAutomationEnabled;
 
   const filteredRequests = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
@@ -215,17 +221,23 @@ function App() {
 
   function apiRequest(path: string, options: RequestInit = {}) {
     const headers = new Headers(options.headers || {});
-    if (apiToken) headers.set("Authorization", "Bearer " + apiToken);
     if (options.body && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
-    return fetch(API_BASE_URL.replace(/\/$/, "") + path, { ...options, headers });
+    return fetch(API_BASE_URL + path, { ...options, headers, cache: "no-store" });
   }
 
-  function saveApiToken() {
-    const nextToken = apiTokenDraft.trim();
-    if (nextToken) localStorage.setItem(API_TOKEN_STORAGE_KEY, nextToken);
-    else localStorage.removeItem(API_TOKEN_STORAGE_KEY);
-    setApiToken(nextToken);
-    setToast(nextToken ? "Chave de acesso salva neste navegador." : "Chave de acesso removida.");
+  async function checkWorkerHealth(silent = false) {
+    try {
+      const response = await fetch(API_BASE_URL + "/health", { cache: "no-store" });
+      if (!response.ok) throw new Error("Worker indisponível.");
+      const health = await response.json();
+      setWorkerHealth("online");
+      setWorkerAutomationEnabled(health.automationEnabled === true);
+      if (!silent) setToast("Conexão com o worker verificada.");
+    } catch {
+      setWorkerHealth("offline");
+      setWorkerAutomationEnabled(false);
+      if (!silent) setToast("Não foi possível conectar ao worker. Confira a implantação e as variáveis de ambiente.");
+    }
   }
 
   function updateForm(field: keyof typeof form, value: string) {
@@ -236,6 +248,10 @@ function App() {
     event.preventDefault();
     const phoneDigits = form.contact.replace(/\D/g, "");
     const selectedBrand = form.brand === "Outra (digitar)" ? brandOther.trim() : form.brand;
+    if (!automationReady) {
+      setToast(workerHealth === "offline" ? "Worker offline. Verifique o servidor de automação." : "A automação ainda não está ativa no servidor.");
+      return;
+    }
     if (!form.customerName.trim() || phoneDigits.length < 10 || !form.device || !selectedBrand) {
       setToast("Preencha nome, celular, onde vai assistir e marca.");
       return;
@@ -331,12 +347,12 @@ function App() {
       if (hasTestResult(updated)) {
         setFlowStage("result");
         setToast("Teste recebido. Confira os dados de acesso.");
-      } else if (installed) {
-        setFlowStage("waiting");
-        setToast("Confirmação enviada. Aguardando a geração do teste.");
-      } else {
+      } else if (updated.status === "awaiting_app") {
         setFlowStage("install");
-        setToast(updated.message || "Instale o aplicativo recomendado e tente novamente.");
+        setToast(updated.message || "Confira a orientação atualizada da FUTEX.");
+      } else {
+        setFlowStage("waiting");
+        setToast(installed ? "Confirmação enviada. Aguardando a geração do teste." : "A FUTEX está atualizando as orientações. Aguarde.");
       }
     } catch (error) {
       setToast(error instanceof Error ? error.message : "Falha ao confirmar a instalação.");
@@ -385,20 +401,16 @@ function App() {
     }
   }
 
-  async function refreshHistory() {
-    if (!API_BASE_URL) {
-      setToast("Configure a API do backend para sincronizar o histórico.");
-      return;
-    }
+  async function refreshHistory(silent = false) {
     try {
       const response = await apiRequest("/api/test-requests");
       if (!response.ok) throw new Error("Não foi possível atualizar o histórico.");
       const data = await response.json();
       const items = Array.isArray(data) ? data : data.items;
       if (Array.isArray(items)) setRequests(items as TestRequest[]);
-      setToast("Histórico atualizado.");
+      if (!silent) setToast("Histórico atualizado.");
     } catch (error) {
-      setToast(error instanceof Error ? error.message : "Erro ao atualizar histórico.");
+      if (!silent) setToast(error instanceof Error ? error.message : "Erro ao atualizar histórico.");
     }
   }
 
@@ -484,8 +496,8 @@ function App() {
             <div className="breadcrumb"><span>Workspace</span><ChevronRight size={14} /><strong>{navigation.find((item) => item.id === page)?.label}</strong></div>
           </div>
           <div className="topbar-actions">
-            <div className={"connection-indicator " + (API_BASE_URL ? "connected" : "disconnected")}>
-              <i />{API_BASE_URL ? "Backend configurado" : "Integração pendente"}
+            <div className={"connection-indicator " + (automationReady ? "connected" : "disconnected")}>
+              <i />{workerHealth === "checking" ? "Verificando worker" : workerHealth === "offline" ? "Worker offline" : automationReady ? "Automação ativa" : "Automação pausada"}
             </div>
             <button className="icon-button notification-button" onClick={() => setToast("Você está em dia. Nenhuma notificação nova.")} aria-label="Notificações">
               <Bell size={18} /><i />
@@ -547,17 +559,17 @@ function App() {
                 <section className="panel automation-panel">
                   <div className="panel-heading"><div><h3>Serviço de automação</h3><p>Estado da conexão com o processador</p></div><span className="panel-menu"><MoreHorizontal size={18} /></span></div>
                   <div className="service-status">
-                    <div className={"service-pulse " + (API_BASE_URL ? "is-on" : "")}><RadioTower size={21} /></div>
-                    <div><strong>{API_BASE_URL ? "Backend configurado" : "Aguardando configuração"}</strong><small>{API_BASE_URL ? "Endpoint informado no ambiente" : "Nenhum worker conectado"}</small></div>
+                    <div className={"service-pulse " + (workerHealth === "online" ? "is-on" : "")}><RadioTower size={21} /></div>
+                    <div><strong>{workerHealth === "checking" ? "Verificando conexão" : workerHealth === "offline" ? "Worker indisponível" : automationReady ? "Automação ativa" : "Worker conectado, automação pausada"}</strong><small>{workerHealth === "online" ? "Servidor de automação respondeu ao health check" : "Verifique a URL do worker e as variáveis do servidor"}</small></div>
                   </div>
                   <div className="service-divider" />
                   <div className="service-detail"><span><i className="detail-dot green-dot" /> Interface web</span><strong>Operacional</strong></div>
-                  <div className="service-detail"><span><i className={"detail-dot " + (API_BASE_URL ? "green-dot" : "amber-dot")} /> API de solicitações</span><strong>{API_BASE_URL ? "Configurada" : "Pendente"}</strong></div>
-                  <div className="service-detail"><span><i className="detail-dot amber-dot" /> Worker FUTEX</span><strong>Aguardando integração</strong></div>
+                  <div className="service-detail"><span><i className={"detail-dot " + (workerHealth === "online" ? "green-dot" : "amber-dot")} /> API de solicitações</span><strong>{workerHealth === "online" ? "Online" : "Offline"}</strong></div>
+                  <div className="service-detail"><span><i className={"detail-dot " + (automationReady ? "green-dot" : "amber-dot")} /> Worker FUTEX</span><strong>{automationReady ? "Ativo" : workerHealth === "online" ? "Pausado" : "Indisponível"}</strong></div>
                   <div className="service-note"><LockKeyhole size={14} /><span>Credenciais e dados sensíveis devem ficar somente no servidor.</span></div>
                 </section>
               </div>
-              <div className="footer-note"><ShieldCheck size={14} /> Ambiente preparado para integração. Nenhum teste é gerado enquanto o serviço real não estiver conectado.</div>
+              <div className="footer-note"><ShieldCheck size={14} /> {automationReady ? "Worker conectado. Solicitações serão processadas pelo atendimento FUTEX." : "A automação só aceitará solicitações quando o worker estiver online e habilitado."}</div>
             </section>
           )}
 
@@ -591,7 +603,7 @@ function App() {
                       {brands.map((brand) => <button type="button" key={brand} className={"choice-chip " + (form.brand === brand ? "selected" : "")} onClick={() => updateForm("brand", brand)}>{brand}{form.brand === brand && <Check size={13} />}</button>)}
                     </div>
                     {form.brand === "Outra (digitar)" && <label className="field brand-other-field"><span>Digite a marca <small>OBRIGATÓRIO</small></span><input value={brandOther} onChange={(event) => setBrandOther(event.target.value)} placeholder="Informe a marca do aparelho" /></label>}
-                    <div className="form-actions"><span><LockKeyhole size={13} /> O teste só será solicitado após conectar o backend.</span><button className="primary-button" type="submit" disabled={submitting}>{submitting ? <LoaderCircle className="spin" size={16} /> : <Zap size={16} />}{submitting ? "Enviando..." : API_BASE_URL ? "Iniciar atendimento" : "Salvar rascunho"}<ArrowRight size={15} /></button></div>
+                    <div className="form-actions"><span><LockKeyhole size={13} /> {automationReady ? "Conexão segura com o worker." : workerHealth === "checking" ? "Verificando o servidor de automação..." : workerHealth === "offline" ? "Worker offline. Confira a implantação." : "Worker online, mas a automação está desativada."}</span><button className="primary-button" type="submit" disabled={submitting || !automationReady}>{submitting ? <LoaderCircle className="spin" size={16} /> : <Zap size={16} />}{submitting ? "Enviando..." : automationReady ? "Iniciar atendimento" : workerHealth === "offline" ? "Worker offline" : "Automação pausada"}<ArrowRight size={15} /></button></div>
                   </form>
                 ) : (
                   <section className="panel flow-state-panel">
@@ -658,8 +670,8 @@ function App() {
             <section className="page-section">
               <div className="page-heading"><div><div className="eyebrow"><Settings2 size={13} /> PREFERÊNCIAS</div><h1>Configurações</h1><p>Gerencie as conexões e os parâmetros do aplicativo.</p></div></div>
               <div className="settings-layout">
-                <section className="panel settings-panel"><div className="settings-heading"><span className="settings-icon"><RadioTower size={19} /></span><div><h3>Integração de automação</h3><p>Conexão entre o aplicativo e o serviço que processa as solicitações.</p></div><span className={"config-value " + (API_BASE_URL ? "configured" : "pending")}>{API_BASE_URL ? "Conectado" : "Pendente"}</span></div><div className="settings-row"><div><strong>API do backend</strong><small>Endereço público do serviço de solicitações.</small></div><span className={"config-value " + (API_BASE_URL ? "configured" : "")}>{API_BASE_URL ? "Configurada" : "Não configurada"}</span></div><div className="api-token-config"><label className="field"><span>Chave de acesso do worker <small>API_TOKEN</small></span><input type="password" value={apiTokenDraft} onChange={(event) => setApiTokenDraft(event.target.value)} placeholder="Cole aqui a chave configurada no servidor" autoComplete="off" /></label><button className="secondary-button" type="button" onClick={saveApiToken}><Check size={14} /> Salvar chave</button><p>A chave fica salva apenas neste navegador. Use esta configuração somente em um painel privado de administrador.</p></div><div className="settings-row"><div><strong>Worker de automação</strong><small>Processador Playwright executado no servidor.</small></div><span className="config-value pending">Pendente</span></div><div className="settings-row"><div><strong>Site de referência</strong><small>Portal utilizado pelo fluxo de testes.</small></div><a className="external-link" href="https://futex.com.br/teste/" target="_blank" rel="noreferrer">Abrir FUTEX <ArrowUpRight size={13} /></a></div><div className="settings-callout"><LockKeyhole size={16} /><p>A chave API_TOKEN é guardada neste navegador para o painel privado de administrador. Não compartilhe este app publicamente com essa chave. Senhas e cookies da FUTEX ficam somente no worker.</p></div></section>
-                <section className="panel settings-panel"><div className="settings-heading"><span className="settings-icon"><Gauge size={19} /></span><div><h3>Ambiente do aplicativo</h3><p>Informações de execução desta versão.</p></div></div><div className="settings-row"><div><strong>Interface web</strong><small>Aplicação React responsiva.</small></div><span className="config-value configured">Operacional</span></div><div className="settings-row"><div><strong>Armazenamento local</strong><small>Rascunhos salvos neste navegador.</small></div><span className="config-value configured">Ativo</span></div><div className="settings-row"><div><strong>Sincronização entre dispositivos</strong><small>Depende da API e do banco de dados.</small></div><span className="config-value pending">Pendente</span></div></section>
+                <section className="panel settings-panel"><div className="settings-heading"><span className="settings-icon"><RadioTower size={19} /></span><div><h3>Integração de automação</h3><p>Conexão entre o aplicativo e o serviço que processa as solicitações.</p></div><span className={"config-value " + (automationReady ? "configured" : "pending")}>{workerHealth === "checking" ? "Verificando" : automationReady ? "Ativo" : workerHealth === "online" ? "Pausado" : "Offline"}</span></div><div className="settings-row"><div><strong>Proxy seguro da aplicação</strong><small>A chave do worker permanece no servidor Vercel.</small></div><span className="config-value configured">Configurado</span></div><div className="settings-row"><div><strong>Worker de automação</strong><small>Processador Playwright executado em servidor persistente.</small></div><span className={"config-value " + (workerHealth === "online" ? "configured" : "pending")}>{workerHealth === "checking" ? "Verificando" : workerHealth === "online" ? "Online" : "Offline"}</span></div><div className="settings-row"><div><strong>Automação FUTEX</strong><small>Ativada por variável segura no servidor.</small></div><span className={"config-value " + (automationReady ? "configured" : "pending")}>{workerAutomationEnabled ? "Ativa" : "Desativada"}</span></div><div className="settings-row"><div><strong>Site de referência</strong><small>Portal utilizado pelo fluxo de testes.</small></div><a className="external-link" href="https://futex.com.br/teste/" target="_blank" rel="noreferrer">Abrir FUTEX <ArrowUpRight size={13} /></a></div><div className="settings-callout"><LockKeyhole size={16} /><p>WORKER_API_TOKEN fica somente nas variáveis de ambiente da Vercel. API_TOKEN fica no servidor do worker. Nenhuma chave privada é armazenada no navegador.</p></div><button className="secondary-button" type="button" onClick={() => void checkWorkerHealth()}><RefreshCw size={14} /> Verificar conexão</button></section>
+                <section className="panel settings-panel"><div className="settings-heading"><span className="settings-icon"><Gauge size={19} /></span><div><h3>Ambiente do aplicativo</h3><p>Informações de execução desta versão.</p></div></div><div className="settings-row"><div><strong>Interface web</strong><small>Aplicação React responsiva.</small></div><span className="config-value configured">Operacional</span></div><div className="settings-row"><div><strong>Armazenamento local</strong><small>Rascunhos salvos neste navegador.</small></div><span className="config-value configured">Ativo</span></div><div className="settings-row"><div><strong>Sincronização entre dispositivos</strong><small>Histórico persistido no volume do servidor worker.</small></div><span className="config-value configured">Preparada</span></div></section>
               </div>
             </section>
           )}

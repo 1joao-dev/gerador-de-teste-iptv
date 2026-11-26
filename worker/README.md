@@ -71,14 +71,15 @@ Gere o token com `openssl rand -hex 32`. Use o mesmo valor em `API_TOKEN` no wor
 
 ## Endpoints
 
-- `GET /health`: estado do serviço e da automação.
+- `GET /health`: health check público de liveness usado pelo Railway.
+- `GET /api/health`: estado autenticado do serviço e da automação.
 - `GET /api/diagnostics/futex`: diagnóstico de leitura do site, sem enviar formulários.
 - `POST /api/test-requests`: inicia uma solicitação.
 - `GET /api/test-requests`: lista o histórico persistido.
 - `GET /api/test-requests/:id`: consulta uma solicitação.
 - `POST /api/test-requests/:id/app-confirmation`: recebe `{ "installed": true | false }` e responde imediatamente; o painel acompanha o processamento por polling.
 
-Todas as rotas `/api` exigem `Authorization: Bearer <API_TOKEN>` em produção. A rota `/health` não expõe segredos.
+Todas as rotas `/api` exigem `Authorization: Bearer <API_TOKEN>` em produção. A rota pública `/health` retorna apenas que o processo está vivo; os detalhes operacionais ficam em `/api/health`.
 
 ## Deploy do worker no Railway
 

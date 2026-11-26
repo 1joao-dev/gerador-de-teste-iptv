@@ -39,6 +39,8 @@ import { API_BASE_URL } from "./config";
 type Page = "overview" | "new" | "history" | "settings";
 type RequestStatus = "draft" | "queued" | "running" | "awaiting_app" | "completed" | "failed";
 
+type AccessDetail = { label: string; value: string };
+
 type TestRequest = {
   id: string;
   customerName: string;
@@ -51,6 +53,8 @@ type TestRequest = {
   password?: string;
   code?: string;
   duration?: string;
+  resultTitle?: string;
+  accessDetails?: AccessDetail[];
   recommendedApp?: string;
   appGuideUrl?: string;
   appInstalled?: boolean;
@@ -110,6 +114,22 @@ function statusLabel(status: RequestStatus) {
     failed: "Falhou",
   };
   return labels[status];
+}
+
+function getAccessDetails(request: TestRequest): AccessDetail[] {
+  if (Array.isArray(request.accessDetails) && request.accessDetails.length > 0) {
+    return request.accessDetails.filter((item) => item && typeof item.label === "string" && typeof item.value === "string" && item.value.trim());
+  }
+
+  return [
+    request.code ? { label: "Código Uniplay", value: request.code } : null,
+    request.username ? { label: "Usuário", value: request.username } : null,
+    request.password ? { label: "Senha", value: request.password } : null,
+  ].filter((item): item is AccessDetail => item !== null);
+}
+
+function hasTestResult(request: TestRequest): boolean {
+  return getAccessDetails(request).length > 0 || request.status === "completed";
 }
 
 function StatusPill({ status }: { status: RequestStatus }) {
@@ -221,12 +241,14 @@ function App() {
         const request: TestRequest = {
           id: result.id ?? makeId(),
           ...payload,
-          status: result.status ?? (result.username || result.password || result.code ? "completed" : result.recommendedApp ? "awaiting_app" : "queued"),
+          status: result.status ?? (Array.isArray(result.accessDetails) && result.accessDetails.length > 0 || result.username || result.password || result.code ? "completed" : result.recommendedApp ? "awaiting_app" : "queued"),
           createdAt: result.createdAt ?? new Date().toISOString(),
           username: result.username,
           password: result.password,
           code: result.code,
           duration: result.duration,
+          resultTitle: result.resultTitle,
+          accessDetails: result.accessDetails,
           recommendedApp: result.recommendedApp,
           appGuideUrl: result.appGuideUrl,
           appInstalled: result.appInstalled,
@@ -234,7 +256,7 @@ function App() {
         };
         setRequests((current) => [request, ...current]);
         setFlowRequest(request);
-        setFlowStage(request.username || request.password ? "result" : request.recommendedApp ? "install" : "waiting");
+        setFlowStage(hasTestResult(request) ? "result" : request.recommendedApp ? "install" : "waiting");
         setToast(request.recommendedApp ? "Aplicativo recomendado recebido." : "Solicitação enviada para a automação.");
         setForm({ customerName: "", contact: "", device: "", brand: "" });
         setBrandOther("");
@@ -282,11 +304,11 @@ function App() {
         ...flowRequest,
         ...result,
         appInstalled: installed,
-        status: result.status ?? (result.username || result.password || result.code ? "completed" : installed ? "running" : "awaiting_app"),
+        status: result.status ?? (Array.isArray(result.accessDetails) && result.accessDetails.length > 0 || result.username || result.password || result.code ? "completed" : installed ? "running" : "awaiting_app"),
       };
       setFlowRequest(updated);
       setRequests((current) => current.map((item) => item.id === updated.id ? updated : item));
-      if (updated.username || updated.password) {
+      if (hasTestResult(updated)) {
         setFlowStage("result");
         setToast("Teste recebido. Confira os dados de acesso.");
       } else if (installed) {
@@ -318,7 +340,7 @@ function App() {
       const updated: TestRequest = { ...flowRequest, ...result };
       setFlowRequest(updated);
       setRequests((current) => current.map((item) => item.id === updated.id ? updated : item));
-      if (updated.username || updated.password || updated.code) setFlowStage("result");
+      if (hasTestResult(updated)) setFlowStage("result");
       else if (updated.recommendedApp && updated.appInstalled !== true) setFlowStage("install");
       else setFlowStage("waiting");
       setToast("Status atualizado.");
@@ -359,10 +381,9 @@ function App() {
   async function copyResult(request: TestRequest) {
     const text = [
       request.recommendedApp ? "Aplicativo: " + request.recommendedApp : "",
-      request.code ? "Código Uniplay: " + request.code : "",
-      request.username ? "Usuário: " + request.username : "",
-      request.password ? "Senha: " + request.password : "",
+      ...getAccessDetails(request).map((detail) => detail.label + ": " + detail.value),
       request.duration ? "Duração: " + request.duration : "",
+      request.message ? "Observação: " + request.message : "",
     ].filter(Boolean).join("\n");
     if (!text) {
       setToast("Esta solicitação ainda não possui credenciais.");
@@ -569,14 +590,13 @@ function App() {
                     )}
                     {flowStage === "result" && flowRequest && (
                       <>
-                        <div className="flow-state-heading"><span className="step-number">05</span><div><h3>Teste gerado com sucesso</h3><p>Confira os dados retornados pela FUTEX.</p></div><StatusPill status="completed" /></div>
+                        <div className="flow-state-heading"><span className="step-number">05</span><div><h3>{flowRequest.resultTitle || "Teste gerado com sucesso"}</h3><p>Confira os dados retornados pela FUTEX para este dispositivo.</p></div><StatusPill status="completed" /></div>
                         <div className="success-duration"><CheckCircle2 size={19} /><div><strong>Teste ativo</strong><span>{flowRequest.duration || "6 horas"} de duração</span></div></div>
+                        {flowRequest.recommendedApp && <div className="result-app-label">Aplicativo: <strong>{flowRequest.recommendedApp}</strong></div>}
                         <div className="credential-grid">
-                          {flowRequest.code && <div className="credential-card"><span>CÓDIGO UNIPLAY</span><strong>{flowRequest.code}</strong><button type="button" onClick={() => void copyValue("Código", flowRequest.code)}><Copy size={13} /> Copiar</button></div>}
-                          {flowRequest.username && <div className="credential-card"><span>USUÁRIO</span><strong>{flowRequest.username}</strong><button type="button" onClick={() => void copyValue("Usuário", flowRequest.username)}><Copy size={13} /> Copiar</button></div>}
-                          {flowRequest.password && <div className="credential-card"><span>SENHA</span><strong>{flowRequest.password}</strong><button type="button" onClick={() => void copyValue("Senha", flowRequest.password)}><Copy size={13} /> Copiar</button></div>}
+                          {getAccessDetails(flowRequest).map((detail, index) => <div className="credential-card" key={detail.label + "-" + index}><span>{detail.label}</span><strong>{detail.value}</strong><button type="button" onClick={() => void copyValue(detail.label, detail.value)}><Copy size={13} /> Copiar</button></div>)}
                         </div>
-                        <button className="primary-button copy-all-button" type="button" onClick={() => void copyResult(flowRequest)}><Copy size={15} /> Copiar todos os dados</button>
+                        {getAccessDetails(flowRequest).length > 0 && <button className="primary-button copy-all-button" type="button" onClick={() => void copyResult(flowRequest)}><Copy size={15} /> Copiar todos os dados</button>}
                         <div className="result-note"><Clock3 size={16} /><p>Para efetuar o pagamento, aguarde pelo menos <strong>2 horas</strong> após o início do teste. Se precisar assinar depois do teste, volte ao site onde iniciou o atendimento.</p></div>
                         <button className="back-button" type="button" onClick={() => { setFlowStage("form"); setFlowRequest(null); setPage("history"); }}>Concluir e abrir histórico</button>
                       </>
@@ -606,7 +626,7 @@ function App() {
                   </tbody></table></div>
                 )}
               </section>
-              {selectedRequest && <section className="panel detail-panel"><div className="panel-heading"><div><h3>Detalhes da solicitação</h3><p>{selectedRequest.id}</p></div><button className="icon-button" onClick={() => setSelectedRequest(null)} aria-label="Fechar detalhes"><X size={17} /></button></div><div className="detail-grid"><div><span>Cliente</span><strong>{selectedRequest.customerName || "Não informado"}</strong></div><div><span>Contato</span><strong>{selectedRequest.contact || "Não informado"}</strong></div><div><span>Dispositivo</span><strong>{selectedRequest.device}</strong></div><div><span>Marca</span><strong>{selectedRequest.brand}</strong></div><div><span>Status</span><StatusPill status={selectedRequest.status} /></div></div>{selectedRequest.message && <p className="detail-message">{selectedRequest.message}</p>}{(selectedRequest.username || selectedRequest.password || selectedRequest.code) && <div className="result-box"><div><strong>Dados retornados pelo serviço</strong><button className="text-button" onClick={() => void copyResult(selectedRequest)}><Copy size={14} /> Copiar</button></div>{selectedRequest.recommendedApp && <p>Aplicativo: <b>{selectedRequest.recommendedApp}</b></p>}{selectedRequest.code && <p>Código Uniplay: <b>{selectedRequest.code}</b></p>}{selectedRequest.username && <p>Usuário: <b>{selectedRequest.username}</b></p>}{selectedRequest.password && <p>Senha: <b>{selectedRequest.password}</b></p>}{selectedRequest.duration && <p>Duração: <b>{selectedRequest.duration}</b></p>}{selectedRequest.status === "completed" && <p>Orientação: aguarde pelo menos <b>2 horas</b> após o início do teste antes de efetuar pagamento.</p>}</div>}</section>}
+              {selectedRequest && <section className="panel detail-panel"><div className="panel-heading"><div><h3>Detalhes da solicitação</h3><p>{selectedRequest.id}</p></div><button className="icon-button" onClick={() => setSelectedRequest(null)} aria-label="Fechar detalhes"><X size={17} /></button></div><div className="detail-grid"><div><span>Cliente</span><strong>{selectedRequest.customerName || "Não informado"}</strong></div><div><span>Contato</span><strong>{selectedRequest.contact || "Não informado"}</strong></div><div><span>Dispositivo</span><strong>{selectedRequest.device}</strong></div><div><span>Marca</span><strong>{selectedRequest.brand}</strong></div><div><span>Status</span><StatusPill status={selectedRequest.status} /></div></div>{selectedRequest.message && <p className="detail-message">{selectedRequest.message}</p>}{(hasTestResult(selectedRequest) || selectedRequest.recommendedApp) && <div className="result-box"><div><strong>{selectedRequest.resultTitle || "Dados retornados pelo serviço"}</strong><button className="text-button" onClick={() => void copyResult(selectedRequest)}><Copy size={14} /> Copiar</button></div>{selectedRequest.recommendedApp && <p>Aplicativo: <b>{selectedRequest.recommendedApp}</b></p>}{getAccessDetails(selectedRequest).map((detail, index) => <p key={detail.label + "-" + index}>{detail.label}: <b>{detail.value}</b></p>)}{selectedRequest.duration && <p>Duração: <b>{selectedRequest.duration}</b></p>}{selectedRequest.status === "completed" && <p>Orientação: aguarde pelo menos <b>2 horas</b> após o início do teste antes de efetuar pagamento.</p>}</div>}</section>}
             </section>
           )}
 

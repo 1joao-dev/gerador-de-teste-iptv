@@ -27,7 +27,7 @@ export function extractDuration(text) {
   return match?.[1]?.trim() || undefined;
 }
 
-const knownStandaloneLabels = /^(c[oó]digo(?: de acesso| uniplay)?|usu[aá]rio|login|senha|password|url|servidor|server|host|portal|dns|mac(?: address)?|pin|playlist|lista m3u|m3u|device id|key|chave|serial|porta|username|e-?mail|link)$/i;
+const knownStandaloneLabels = /^(c[oó]digo(?: de acesso| uniplay| de ativa[cç][aã]o)?|usu[aá]rio|login|senha|password|url|url do servidor|server url|portal url|servidor|server|host|portal|dns|mac(?: address)?|pin|playlist|lista m3u|m3u(?: url)?|device id|device key|client id|account id|token|key|chave|serial|porta|username|e-?mail|link)$/i;
 
 function cleanLabel(value) {
   return value.replace(/^[\s•\-–—📌🔑✅☑️]+/u, "").replace(/[*_]+/g, "").trim();

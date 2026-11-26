@@ -12,6 +12,7 @@ import {
   closeFutexSession,
   continueFutexSession,
   startFutexSession,
+  inspectFutexPage,
 } from "./futex-automation.js";
 
 const app = express();
@@ -158,6 +159,18 @@ app.get("/health", (_req, res) => {
 
 app.use("/api", requireApiToken);
 
+app.get("/api/diagnostics/futex", async (_req, res) => {
+  try {
+    const diagnostic = await inspectFutexPage();
+    res.setHeader("Cache-Control", "no-store");
+    return res.json(diagnostic);
+  } catch (error) {
+    return res.status(502).json({
+      message: error instanceof Error ? error.message : "Não foi possível abrir o site FUTEX.",
+    });
+  }
+});
+
 app.get("/api/test-requests", (_req, res) => {
   const items = [...jobs.values()]
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
@@ -285,6 +298,8 @@ app.post("/api/test-requests/:id/app-confirmation", (req, res) => {
   })();
 });
 
+await loadJobs();
+
 const server = app.listen(port, () => {
   console.log("IPTV Flow Worker listening on port " + port);
 });
@@ -314,8 +329,6 @@ async function shutdown() {
   await closeFutexBrowser();
   process.exit(0);
 }
-
-await loadJobs();
 
 process.on("SIGINT", shutdown);
 process.on("SIGTERM", shutdown);

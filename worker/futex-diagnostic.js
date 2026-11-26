@@ -42,6 +42,7 @@ try {
     title: summary.title,
     checkedAt: summary.checkedAt,
     frameCount: summary.frameCount,
+    manualChat: summary.manualChat,
     frames: summary.frames.map((frame) => ({
       name: frame.name,
       url: frame.url,

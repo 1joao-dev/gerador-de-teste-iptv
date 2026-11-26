@@ -58,10 +58,12 @@ type TestRequest = {
   recommendedApp?: string;
   appGuideUrl?: string;
   appInstalled?: boolean;
+  autoConfirmInstall?: boolean;
   message?: string;
 };
 
 const APP_ACCESS_CODE_STORAGE_KEY = "iptv-flow-app-access-code-v1";
+const AUTO_CONFIRM_INSTALL_STORAGE_KEY = "iptv-flow-auto-confirm-install-v1";
 
 const devices = [
   { label: "Smart TV", detail: "Televisores inteligentes", icon: Tv },
@@ -156,6 +158,7 @@ function App() {
   const [workerHealth, setWorkerHealth] = useState<"checking" | "online" | "offline">("checking");
   const [appAccessCode, setAppAccessCode] = useState("");
   const [appAccessCodeDraft, setAppAccessCodeDraft] = useState("");
+  const [autoConfirmInstall, setAutoConfirmInstall] = useState(false);
   const [workerAutomationEnabled, setWorkerAutomationEnabled] = useState(false);
   const [diagnosingFutex, setDiagnosingFutex] = useState(false);
   const [futexDiagnostic, setFutexDiagnostic] = useState("");
@@ -174,6 +177,7 @@ function App() {
       const savedAccessCode = localStorage.getItem(APP_ACCESS_CODE_STORAGE_KEY) ?? "";
       setAppAccessCode(savedAccessCode);
       setAppAccessCodeDraft(savedAccessCode);
+      setAutoConfirmInstall(localStorage.getItem(AUTO_CONFIRM_INSTALL_STORAGE_KEY) === "true");
     } catch {
       setAppAccessCode("");
       setAppAccessCodeDraft("");
@@ -252,6 +256,15 @@ function App() {
     setWorkerHealth("checking");
   }
 
+  function updateAutoConfirmInstall(enabled: boolean) {
+    setAutoConfirmInstall(enabled);
+    try {
+      localStorage.setItem(AUTO_CONFIRM_INSTALL_STORAGE_KEY, enabled ? "true" : "false");
+    } catch {
+      setToast("Não foi possível salvar essa preferência neste navegador.");
+    }
+  }
+
   async function runFutexDiagnostic() {
     setDiagnosingFutex(true);
     setFutexDiagnostic("");
@@ -291,6 +304,7 @@ function App() {
       contact: form.contact.trim(),
       device: form.device,
       brand: selectedBrand,
+      autoConfirmInstall,
     };
 
     if (API_BASE_URL) {
@@ -646,9 +660,9 @@ function App() {
                       <>
                         <div className="flow-state-heading"><span className="step-number">04</span><div><h3>Aplicativo recomendado</h3><p>Esta é a etapa de instalação mostrada pela FUTEX.</p></div><StatusPill status="awaiting_app" /></div>
                         <div className="app-recommendation-card"><span className="app-recommendation-icon"><Monitor size={24} /></span><div><small>APLICATIVO INDICADO</small><strong>{flowRequest.recommendedApp}</strong><p>Para {flowRequest.device} {flowRequest.brand}.</p></div></div>
-                        {flowRequest.appGuideUrl && <a className="external-link guide-link" href={flowRequest.appGuideUrl} target="_blank" rel="noreferrer">Assistir ao tutorial de instalação <ArrowUpRight size={14} /></a>}
+                        <p className="detail-message">Instale o aplicativo recomendado no aparelho. Você não precisa abrir o site FUTEX: continue o atendimento por aqui.</p>
                         {flowRequest.message && <p className="detail-message">{flowRequest.message}</p>}
-                        <div className="flow-question"><strong>Conseguiu instalar o {flowRequest.recommendedApp}?</strong><p>Confirme para que a automação continue o atendimento.</p></div>
+                        <div className="flow-question"><strong>Conseguiu instalar o {flowRequest.recommendedApp}?</strong><p>Responda aqui no IPTV Flow. A automação continuará no servidor, sem abrir o site FUTEX no seu celular.</p></div>
                         <div className="flow-action-row"><button className="secondary-button" type="button" onClick={() => void confirmAppInstalled(false)} disabled={confirmingApp}>{confirmingApp ? <LoaderCircle className="spin" size={15} /> : <X size={15} />} Não consegui</button><button className="primary-button" type="button" onClick={() => void confirmAppInstalled(true)} disabled={confirmingApp}>{confirmingApp ? <LoaderCircle className="spin" size={15} /> : <Check size={15} />} Sim, consegui</button></div>
                       </>
                     )}
@@ -668,7 +682,7 @@ function App() {
                           {getAccessDetails(flowRequest).map((detail, index) => <div className="credential-card" key={detail.label + "-" + index}><span>{detail.label}</span><strong>{detail.value}</strong><button type="button" onClick={() => void copyValue(detail.label, detail.value)}><Copy size={13} /> Copiar</button></div>)}
                         </div>
                         {getAccessDetails(flowRequest).length > 0 && <button className="primary-button copy-all-button" type="button" onClick={() => void copyResult(flowRequest)}><Copy size={15} /> Copiar todos os dados</button>}
-                        <div className="result-note"><Clock3 size={16} /><p>Para efetuar o pagamento, aguarde pelo menos <strong>2 horas</strong> após o início do teste. Se precisar assinar depois do teste, volte ao site onde iniciou o atendimento.</p></div>
+                        <div className="result-note"><Clock3 size={16} /><p>Seu teste foi gerado pela FUTEX em segundo plano. Os dados ficam no histórico do IPTV Flow: copie as credenciais e informe no aplicativo indicado. Não é necessário abrir o site FUTEX.</p></div>
                         <button className="back-button" type="button" onClick={() => { setFlowStage("form"); setFlowRequest(null); setPage("history"); }}>Concluir e abrir histórico</button>
                       </>
                     )}
@@ -705,7 +719,8 @@ function App() {
             <section className="page-section">
               <div className="page-heading"><div><div className="eyebrow"><Settings2 size={13} /> PREFERÊNCIAS</div><h1>Configurações</h1><p>Gerencie as conexões e os parâmetros do aplicativo.</p></div></div>
               <div className="settings-layout">
-                <section className="panel settings-panel"><div className="settings-heading"><span className="settings-icon"><RadioTower size={19} /></span><div><h3>Integração de automação</h3><p>Conexão entre o aplicativo e o serviço que processa as solicitações.</p></div><span className={"config-value " + (automationReady ? "configured" : "pending")}>{workerHealth === "checking" ? "Verificando" : automationReady ? "Ativo" : workerHealth === "online" ? "Pausado" : "Offline"}</span></div><div className="settings-row"><div><strong>Proxy seguro da aplicação</strong><small>A chave do worker permanece no servidor Vercel.</small></div><span className="config-value configured">Configurado</span></div><div className="api-token-config"><label className="field"><span>Código de acesso do painel <small>APP_ACCESS_CODE</small></span><input type="password" value={appAccessCodeDraft} onChange={(event) => setAppAccessCodeDraft(event.target.value)} placeholder="Digite o código configurado na Vercel" autoComplete="current-password" /></label><button className="secondary-button" type="button" onClick={saveAppAccessCode}><Check size={14} /> Salvar código</button><p>Use um código aleatório com pelo menos 32 caracteres, diferente do token do worker. O token interno nunca é enviado ao navegador.</p></div><div className="settings-row"><div><strong>Worker de automação</strong><small>Processador Playwright executado em servidor persistente.</small></div><span className={"config-value " + (workerHealth === "online" ? "configured" : "pending")}>{workerHealth === "checking" ? "Verificando" : workerHealth === "online" ? "Online" : "Offline"}</span></div><div className="settings-row"><div><strong>Automação FUTEX</strong><small>Ativada por variável segura no servidor.</small></div><span className={"config-value " + (automationReady ? "configured" : "pending")}>{workerAutomationEnabled ? "Ativa" : "Desativada"}</span></div><div className="settings-row"><div><strong>Site de referência</strong><small>Portal utilizado pelo fluxo de testes.</small></div><a className="external-link" href="https://futex.com.br/teste/" target="_blank" rel="noreferrer">Abrir FUTEX <ArrowUpRight size={13} /></a></div><div className="settings-callout"><LockKeyhole size={16} /><p>O código de acesso do painel fica salvo localmente neste navegador. O token interno do worker fica somente nas variáveis de ambiente dos servidores e nunca é enviado ao navegador.</p></div><button className="secondary-button" type="button" onClick={() => void checkWorkerHealth()}><RefreshCw size={14} /> Verificar conexão</button><button className="secondary-button" type="button" onClick={() => void runFutexDiagnostic()} disabled={diagnosingFutex || workerHealth !== "online"}>{diagnosingFutex ? <LoaderCircle className="spin" size={14} /> : <Activity size={14} />} {diagnosingFutex ? "Analisando site..." : "Diagnosticar FUTEX"}</button>{futexDiagnostic && <><pre className="diagnostic-output">{futexDiagnostic}</pre><button className="text-button" type="button" onClick={() => void copyValue("Diagnóstico", futexDiagnostic)}><Copy size={14} /> Copiar diagnóstico</button></>}</section>
+                <section className="panel settings-panel"><div className="settings-heading"><span className="settings-icon"><RadioTower size={19} /></span><div><h3>Integração de automação</h3><p>Conexão entre o aplicativo e o serviço que processa as solicitações.</p></div><span className={"config-value " + (automationReady ? "configured" : "pending")}>{workerHealth === "checking" ? "Verificando" : automationReady ? "Ativo" : workerHealth === "online" ? "Pausado" : "Offline"}</span></div><div className="settings-row"><div><strong>Proxy seguro da aplicação</strong><small>A chave do worker permanece no servidor Vercel.</small></div><span className="config-value configured">Configurado</span></div><div className="api-token-config"><label className="field"><span>Código de acesso do painel <small>APP_ACCESS_CODE</small></span><input type="password" value={appAccessCodeDraft} onChange={(event) => setAppAccessCodeDraft(event.target.value)} placeholder="Digite o código configurado na Vercel" autoComplete="current-password" /></label><button className="secondary-button" type="button" onClick={saveAppAccessCode}><Check size={14} /> Salvar código</button><p>Use um código aleatório com pelo menos 32 caracteres, diferente do token do worker. O token interno nunca é enviado ao navegador.</p></div><div className="settings-row"><div><strong>Worker de automação</strong><small>Processador Playwright executado em servidor persistente.</small></div><span className={"config-value " + (workerHealth === "online" ? "configured" : "pending")}>{workerHealth === "checking" ? "Verificando" : workerHealth === "online" ? "Online" : "Offline"}</span></div><div className="settings-row"><div><strong>Automação FUTEX</strong><small>Ativada por variável segura no servidor.</small></div><span className={"config-value " + (automationReady ? "configured" : "pending")}>{workerAutomationEnabled ? "Ativa" : "Desativada"}</span></div><div className="settings-row"><div><strong>FUTEX em segundo plano</strong><small>O site é acessado apenas pelo servidor de automação; não abre no celular.</small></div><span className="config-value configured">Integrado</span></div>
+                  <label className="auto-confirm-row"><span><strong>Avançar automaticamente após indicar o aplicativo</strong><small>Se ativado, o worker responde “Sim” quando a FUTEX perguntar se o app foi instalado. Ative somente se essa resposta for verdadeira para seu uso.</small></span><input type="checkbox" checked={autoConfirmInstall} onChange={(event) => updateAutoConfirmInstall(event.target.checked)} /></label><div className="settings-callout"><LockKeyhole size={16} /><p>O código de acesso do painel fica salvo localmente neste navegador. O token interno do worker fica somente nas variáveis de ambiente dos servidores e nunca é enviado ao navegador.</p></div><button className="secondary-button" type="button" onClick={() => void checkWorkerHealth()}><RefreshCw size={14} /> Verificar conexão</button><button className="secondary-button" type="button" onClick={() => void runFutexDiagnostic()} disabled={diagnosingFutex || workerHealth !== "online"}>{diagnosingFutex ? <LoaderCircle className="spin" size={14} /> : <Activity size={14} />} {diagnosingFutex ? "Analisando site..." : "Diagnosticar FUTEX"}</button>{futexDiagnostic && <><pre className="diagnostic-output">{futexDiagnostic}</pre><button className="text-button" type="button" onClick={() => void copyValue("Diagnóstico", futexDiagnostic)}><Copy size={14} /> Copiar diagnóstico</button></>}</section>
                 <section className="panel settings-panel"><div className="settings-heading"><span className="settings-icon"><Gauge size={19} /></span><div><h3>Ambiente do aplicativo</h3><p>Informações de execução desta versão.</p></div></div><div className="settings-row"><div><strong>Interface web</strong><small>Aplicação React responsiva.</small></div><span className="config-value configured">Operacional</span></div><div className="settings-row"><div><strong>Armazenamento local</strong><small>Rascunhos salvos neste navegador.</small></div><span className="config-value configured">Ativo</span></div><div className="settings-row"><div><strong>Sincronização entre dispositivos</strong><small>Histórico persistido no volume do servidor worker.</small></div><span className="config-value configured">Preparada</span></div></section>
               </div>
             </section>

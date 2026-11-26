@@ -237,7 +237,7 @@ export async function startFutexSession(payload) {
     let scope = await findChatScope(page);
     let text = await visibleText(scope);
     if (!/como posso te chamar/i.test(text)) {
-      const startOptions = ["Fazer teste grátis", "Teste grátis", "Iniciar atendimento", "Atendimento"];
+      const startOptions = ["Fazer teste grátis", "Iniciar teste grátis", "Teste grátis", "Gerar teste", "Iniciar atendimento", "Atendimento"];
       for (const option of startOptions) {
         try {
           await clickChoiceAnyFrame(page, [option]);
@@ -249,16 +249,16 @@ export async function startFutexSession(payload) {
     }
 
     scope = await findChatScope(page);
-    await waitForText(scope, /como posso te chamar|qual é o seu nome/i, 30_000);
+    await waitForText(scope, /como posso.{0,30}chamar|qual(?: é)? o? seu nome|qual é o seu nome/i, 30_000);
     await sendChatMessage(scope, payload.customerName);
 
-    await waitForText(scope, /whatsapp|celular|telefone|número.*ddd/i, 25_000);
+    await waitForText(scope, /qual.{0,50}(?:whatsapp|celular|telefone)|(?:whatsapp|celular|telefone).{0,50}(?:ddd|n[uú]mero)/i, 25_000);
     await sendChatMessage(scope, payload.contact.replace(/\D/g, ""));
 
-    await waitForText(scope, /onde.*assistir|qual.*dispositivo|em qual.*assistir|selecione.*dispositivo/i, 25_000);
+    await waitForText(scope, /onde.{0,60}assistir|qual.{0,40}dispositivo|em qual.{0,40}assistir|selecione.{0,40}dispositivo/i, 25_000);
     await clickChoiceAny(scope, deviceChoiceLabels(payload.device));
 
-    await waitForText(scope, /marca|qual.*aparelho/i, 25_000);
+    await waitForText(scope, /qual.{0,40}marca|marca.{0,40}(?:tv|aparelho|dispositivo)/i, 25_000);
     const knownBrands = ["Samsung", "LG", "TCL", "Sony", "Philips", "Panasonic", "Philco", "AOC", "Roku"];
     if (!knownBrands.includes(payload.brand)) {
       await clickChoiceAny(scope, ["Outra (digitar)", "Outra", "Outros"]);

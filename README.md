@@ -1,142 +1,100 @@
 # IPTV Flow — Control Center
 
-Painel web mobile-first para organizar solicitações de testes IPTV e acompanhar um serviço de automação autorizado.
+Painel web mobile-first para iniciar e acompanhar solicitações do atendimento público FUTEX.
 
-## O que existe nesta versão
+## Estrutura
 
-- Dashboard com indicadores calculados a partir dos registros locais.
-- Fluxo baseado nas etapas observadas na FUTEX: nome, WhatsApp, onde vai assistir, marca, confirmação de instalação do aplicativo recomendado e exibição das credenciais.
-- Histórico local com busca e detalhes.
-- Configurações com estado explícito da integração.
-- Layout responsivo para desktop e celular.
-- Camada inicial de comunicação com uma API externa.
+- `src/`: interface React + TypeScript + Vite.
+- `api/worker/[...path].js`: proxy server-side da Vercel. Mantém a chave do worker fora do navegador.
+- `worker/`: API Node.js, Playwright, parser dinâmico, testes e Dockerfile.
 
-## Importante: estado atual da integração
+## Fluxo de atendimento
 
-A interface está funcional para navegação, seleção das opções de dispositivo e marca observadas nas capturas, criação de rascunhos locais, pesquisa, confirmação de instalação do aplicativo recomendado (quando a API retornar essa etapa) e apresentação de campos de acesso dinâmicos retornados pelo backend. **Sem backend configurado, o sistema salva apenas um rascunho; não gera credenciais.**
+O painel coleta nome, WhatsApp, dispositivo e marca. O worker abre o atendimento FUTEX em Chromium, preenche as etapas, aguarda a recomendação do aplicativo e mantém a sessão enquanto o usuário confirma a instalação. Depois, continua o fluxo e apresenta os dados de acesso que a própria FUTEX retornar.
 
-A integração real deve ser feita por um backend/worker separado. O frontend envia:
+O formato de credenciais não é fixo: o parser suporta rótulos dinâmicos como Código, Usuário, Senha, Servidor, MAC, PIN, Playlist, URL e também preserva o bloco final caso o site retorne dados sem rótulos.
 
-```http
-POST /api/test-requests
-Content-Type: application/json
-```
+## Arquitetura
 
-Exemplo de corpo:
+- **Painel:** Vercel (Vite + React).
+- **Proxy:** Vercel Function em `api/worker/[...path].js`.
+- **Automação:** Playwright em um servidor persistente, recomendado Railway com Docker.
+- **Histórico:** arquivo JSON em volume persistente do worker (`DATA_DIR=/data`).
 
-```json
-{
-  "customerName": "Cliente 01",
-  "contact": "(11) 99999-9999",
-  "device": "Smart TV",
-  "brand": "Samsung"
-}
-```
+Não execute Chromium em uma função serverless da Vercel. A Vercel hospeda o painel e o proxy; o worker precisa permanecer ativo para manter a sessão do navegador entre a indicação do aplicativo e a confirmação do usuário.
 
-A interface espera um objeto de resposta com pelo menos `id`, `status` e `createdAt`. Credenciais opcionais só são exibidas se vierem da resposta real do backend:
+## Configuração da Vercel
 
-```json
-{
-  "id": "request-id",
-  "status": "awaiting_app",
-  "createdAt": "2026-11-26T12:00:00.000Z",
-  "recommendedApp": "Zuxo Player",
-  "appGuideUrl": "https://endereco-do-tutorial",
-  "message": "Instale o aplicativo indicado e confirme para continuar."
-}
-```
-
-
-Após a pessoa confirmar que conseguiu instalar o aplicativo, o frontend envia:
-
-```http
-POST /api/test-requests/{id}/app-confirmation
-Content-Type: application/json
-```
-
-```json
-{ "installed": true }
-```
-
-A interface consulta o andamento de uma solicitação em aberto por:
-
-```http
-GET /api/test-requests/{id}
-```
-
-O formato de acesso muda conforme o dispositivo e o aplicativo. Por isso, o frontend não presume que todo teste terá Código Uniplay, usuário e senha. O backend deve normalizar os dados retornados pela FUTEX em uma lista dinâmica `accessDetails`, com o rótulo e o valor de cada campo. Assim, o app exibe e permite copiar somente os campos que realmente vierem na resposta.
-
-Exemplo ilustrativo de resposta (os campos e valores reais dependem do dispositivo escolhido e do retorno da FUTEX):
-
-```json
-{
-  "id": "request-id",
-  "status": "completed",
-  "device": "Smart TV",
-  "brand": "LG",
-  "recommendedApp": "Aplicativo retornado pela FUTEX",
-  "resultTitle": "Dados do seu teste",
-  "duration": "6 horas",
-  "accessDetails": [
-    { "label": "Código", "value": "valor-retornado-pela-futex" },
-    { "label": "Usuário", "value": "usuario-retornado-pela-futex" },
-    { "label": "Senha", "value": "senha-retornada-pela-futex" }
-  ],
-  "message": "Orientação retornada pela FUTEX."
-}
-```
-
-Se um tipo de aparelho retornar URL, MAC, PIN, playlist ou outros dados, o backend envia esses mesmos itens em `accessDetails` com rótulos adequados. Não é necessário alterar a interface para cada novo formato. Os campos antigos `code`, `username` e `password` continuam aceitos para compatibilidade.
-
-Para sincronizar o histórico, o backend também deve implementar:
-
-```http
-GET /api/test-requests
-```
-
-O endpoint pode retornar uma lista de solicitações ou um objeto `{ "items": [] }`.
-
-## Arquitetura recomendada
-
-- **Frontend:** React + TypeScript + Vite, hospedado na Vercel.
-- **API e worker:** serviço Node.js em `worker/`, hospedado em Railway, Render ou VPS.
-- **Automação:** Playwright executado no servidor, respeitando os controles de acesso, os limites e as regras do site FUTEX.
-- **Banco de dados:** PostgreSQL/Supabase para histórico compartilhado e autenticação administrativa.
-
-Não é recomendado executar um navegador Playwright persistente dentro de uma função serverless da Vercel. A Vercel pode hospedar a interface e encaminhar as chamadas para um worker externo.
-
-## Variáveis de ambiente do frontend
-
-Crie `.env.local`:
+Em **Project → Settings → Environment Variables**, adicione:
 
 ```env
-VITE_API_BASE_URL=https://sua-api.example.com
+WORKER_API_URL=https://SEU-WORKER.up.railway.app
+WORKER_API_TOKEN=mesmo-token-configurado-no-worker
 ```
 
-A URL pode ser pública. **Não coloque tokens, senhas, cookies ou chaves privadas em variáveis `VITE_*`**, pois elas são incorporadas ao bundle do navegador. Para esta primeira versão de uso privado, informe `API_TOKEN` no painel em Configurações; a chave fica salva no navegador. Não compartilhe publicamente esse painel enquanto usar uma chave compartilhada.
+Não use prefixo `VITE_` nessas variáveis. O proxy lê os segredos no servidor e os injeta somente na chamada privada ao worker.
 
-## Desenvolvimento
+## Configuração do worker
+
+Consulte [worker/README.md](worker/README.md) para criar o serviço Railway, configurar o volume e instalar Chromium.
+
+Variáveis principais:
+
+```env
+NODE_ENV=production
+PORT=8787
+DATA_DIR=/data
+API_TOKEN=token-aleatorio-longo
+FUTEX_URL=https://futex.com.br/teste/
+FUTEX_AUTOMATION_ENABLED=false
+FUTEX_HEADLESS=true
+MIN_SECONDS_BETWEEN_REQUESTS=30
+MAX_ACTIVE_SESSIONS=1
+MAX_SESSION_MINUTES=30
+```
+
+Gere um token com `openssl rand -hex 32`. Configure o mesmo valor em `API_TOKEN` no worker e `WORKER_API_TOKEN` na Vercel. Mantenha `FUTEX_AUTOMATION_ENABLED=false` até executar o diagnóstico e validar o fluxo real.
+
+## Desenvolvimento local
+
+Terminal 1:
+
+```bash
+cd worker
+npm install
+npx playwright install --with-deps chromium
+cp .env.example .env
+npm run dev
+```
+
+Terminal 2, na raiz:
 
 ```bash
 npm install
 npm run dev
 ```
 
-## Build
+O Vite encaminha `/api/worker/*` ao worker local em `127.0.0.1:8787`. Em desenvolvimento, deixe `API_TOKEN` vazio e `NODE_ENV=development`.
+
+## Validação
+
+No painel, acesse **Configurações → Verificar conexão** e depois **Diagnosticar FUTEX**. O diagnóstico lê a página e lista os frames, textos, inputs e botões encontrados sem enviar dados nem gerar teste.
+
+Execute os testes do parser:
 
 ```bash
+npm test --prefix worker
+npm run check --prefix worker
 npm run build
-npm run preview
 ```
 
-## Próximas etapas
+O build e os testes verificam a aplicação e a extração de formatos de credenciais. A interação real com a FUTEX ainda precisa ser validada no worker implantado, pois o site usa conteúdo dinâmico e pode mudar seletores ou exigir ações manuais.
 
-1. Instalar e validar o serviço Playwright disponível em `worker/` com uma solicitação real controlada; ajustar seletores caso o atendimento do site tenha mudado.
-2. Configurar autenticação administrativa e banco de dados.
-3. Implementar fila, estados de execução, tentativas e logs sem segredos.
-4. Validar o fluxo ponta a ponta antes de liberar a geração real.
+## Segurança e limites
 
-
-## Worker Playwright
-
-O primeiro esqueleto da automação está em `worker/`. Consulte [worker/README.md](worker/README.md) para instalação, variáveis de ambiente, endpoints e limitações. A automação permanece desativada por padrão até a validação do fluxo real.
+- Não há bypass de CAPTCHA, login, bloqueios, rate limits ou outras proteções do site.
+- Uma sessão Playwright ativa por vez e intervalo mínimo de 30 segundos entre novas solicitações.
+- Sessões expiram após 30 minutos de inatividade.
+- O histórico e os dados de acesso ficam no volume privado do worker; proteja o volume e o acesso administrativo.
+- Reiniciar o worker encerra sessões abertas; as solicitações interrompidas ficam marcadas para ação manual.
+- Para múltiplos usuários, migre o histórico para PostgreSQL e implemente autenticação individual.

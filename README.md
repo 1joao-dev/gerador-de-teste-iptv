@@ -30,10 +30,10 @@ Em **Project → Settings → Environment Variables**, adicione:
 ```env
 WORKER_API_URL=https://SEU-WORKER.up.railway.app
 WORKER_API_TOKEN=mesmo-token-configurado-no-worker
-APP_ACCESS_CODE=crie-um-codigo-privado-para-abrir-o-painel
+APP_ACCESS_CODE=chave-aleatoria-de-pelo-menos-32-caracteres
 ```
 
-Não use prefixo `VITE_` nessas variáveis. O proxy lê os segredos no servidor e os injeta somente na chamada privada ao worker. O painel solicita o `APP_ACCESS_CODE` em Configurações antes de consultar o backend. Não compartilhe esse código.
+Gere `APP_ACCESS_CODE` com `openssl rand -hex 16` e mantenha-o privado. Não use prefixo `VITE_` nessas variáveis. O proxy lê os segredos no servidor e os injeta somente na chamada privada ao worker. O painel solicita o `APP_ACCESS_CODE` em Configurações antes de consultar o backend. Não compartilhe esse código.
 
 ## Configuração do worker
 

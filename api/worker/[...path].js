@@ -12,6 +12,7 @@ const allowedRoutes = [
 ];
 
 export default async function handler(req, res) {
+  res.setHeader("Cache-Control", "no-store");
   if (!["GET", "POST"].includes(req.method || "")) {
     res.setHeader("Allow", "GET, POST");
     return res.status(405).json({ message: "Método não permitido." });

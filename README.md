@@ -58,6 +58,12 @@ Content-Type: application/json
 { "installed": true }
 ```
 
+A interface consulta o andamento de uma solicitação em aberto por:
+
+```http
+GET /api/test-requests/{id}
+```
+
 Quando a FUTEX concluir o fluxo, o backend deve retornar os dados reais:
 
 ```json

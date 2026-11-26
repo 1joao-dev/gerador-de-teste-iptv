@@ -113,7 +113,7 @@ Crie `.env.local`:
 VITE_API_BASE_URL=https://sua-api.example.com
 ```
 
-A URL pode ser pública. **Não coloque tokens, senhas, cookies ou chaves privadas em variáveis `VITE_*`**, pois elas são incorporadas ao bundle do navegador.
+A URL pode ser pública. **Não coloque tokens, senhas, cookies ou chaves privadas em variáveis `VITE_*`**, pois elas são incorporadas ao bundle do navegador. Para esta primeira versão de uso privado, informe `API_TOKEN` no painel em Configurações; a chave fica salva no navegador. Não compartilhe publicamente esse painel enquanto usar uma chave compartilhada.
 
 ## Desenvolvimento
 

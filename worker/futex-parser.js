@@ -91,7 +91,7 @@ export function extractAccessDetails(text) {
     }
 
     const label = cleanLabel(line).replace(/[:=]+$/, "");
-    if (knownStandaloneLabels.test(label) && lines[index + 1]) {
+    if ((knownStandaloneLabels.test(label) || /[:=]$/.test(line)) && lines[index + 1]) {
       const next = lines[index + 1].replace(/^[🔑✅☑️📌\s]+/u, "").trim();
       if (next && !knownStandaloneLabels.test(cleanLabel(next))) {
         add(label, next);

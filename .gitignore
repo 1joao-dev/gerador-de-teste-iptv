@@ -5,3 +5,5 @@ dist
 .env.*.local
 .DS_Store
 *.log
+# Dados persistidos localmente pelo worker
+worker/data/

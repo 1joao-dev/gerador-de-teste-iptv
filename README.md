@@ -10,7 +10,7 @@ Painel web mobile-first para iniciar e acompanhar solicitações do atendimento 
 
 ## Fluxo de atendimento
 
-O painel coleta nome, WhatsApp, dispositivo e marca. O worker abre o atendimento FUTEX em Chromium, preenche as etapas, aguarda a recomendação do aplicativo e mantém a sessão enquanto o usuário confirma a instalação. Depois, continua o fluxo e apresenta os dados de acesso que a própria FUTEX retornar.
+O painel coleta nome, WhatsApp, dispositivo e marca. O worker abre o atendimento FUTEX em Chromium no servidor, preenche as etapas e devolve a recomendação e as credenciais para o próprio IPTV Flow. O usuário não precisa abrir a FUTEX nem preencher o formulário novamente. Se o chatbot perguntar se o aplicativo foi instalado, a confirmação pode ser feita dentro do IPTV Flow ou avançada automaticamente por uma preferência salva no app.
 
 O formato de credenciais não é fixo: o parser suporta rótulos dinâmicos como Código, Usuário, Senha, Servidor, MAC, PIN, Playlist, URL e também preserva o bloco final caso o site retorne dados sem rótulos.
 
@@ -92,6 +92,10 @@ npm run build
 ```
 
 O build e os testes verificam a aplicação e a extração de formatos de credenciais. A interação real com a FUTEX ainda precisa ser validada no worker implantado, pois o site usa conteúdo dinâmico e pode mudar seletores ou exigir ações manuais.
+
+## Fluxo somente pelo IPTV Flow
+
+A tela do painel não incorpora nem abre a FUTEX no celular. Toda a navegação Playwright acontece no worker. A recomendação do aplicativo, o andamento e o resultado são exibidos dentro do IPTV Flow. Em **Configurações**, a opção **Avançar automaticamente após indicar o aplicativo** faz o worker responder “Sim” à pergunta de instalação sem intervenção por solicitação. Ative somente quando essa resposta corresponder ao uso real; se ficar desligada, a confirmação aparece dentro do próprio IPTV Flow.
 
 ## Segurança e limites
 

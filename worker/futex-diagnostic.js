@@ -1,12 +1,25 @@
 import fs from "node:fs/promises";
-import { closeFutexBrowser, inspectFutexPage } from "./futex-automation.js";
+import { closeFutexBrowser, closeFutexSession, inspectFutexPage, readFutexConversation, startFutexManualSession } from "./futex-automation.js";
 
 const outputPath = new URL("./futex-diagnostic-report.json", import.meta.url);
 let report;
+let manualSession;
 
 try {
   report = await inspectFutexPage();
+  const opened = await startFutexManualSession();
+  manualSession = opened.session;
+  const liveChat = await readFutexConversation(manualSession);
+  const { result: parsedResult, ...conversation } = liveChat;
   const summary = {
+    manualChat: {
+      status: opened.result.status,
+      messageCount: conversation.chatMessages.length,
+      firstMessage: conversation.chatMessages[0]?.text || "",
+      inputPlaceholder: conversation.chatInputPlaceholder,
+      options: conversation.chatOptions,
+      resultDetected: Boolean(parsedResult),
+    },
     status: "completed",
     url: report.url,
     title: report.title,
@@ -20,6 +33,8 @@ try {
       dom: frame.dom,
     })),
   };
+  await closeFutexSession(manualSession);
+  manualSession = undefined;
   await fs.writeFile(outputPath, JSON.stringify(summary, null, 2), "utf8");
   console.log("FUTEX_DIAGNOSTIC_RESULT=" + JSON.stringify({
     status: summary.status,
@@ -45,5 +60,6 @@ try {
   console.error("FUTEX_DIAGNOSTIC_RESULT=" + JSON.stringify(failure));
   process.exitCode = 1;
 } finally {
+  if (manualSession) await closeFutexSession(manualSession);
   await closeFutexBrowser();
 }

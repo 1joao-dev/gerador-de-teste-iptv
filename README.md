@@ -10,7 +10,7 @@ Painel web mobile-first para iniciar e acompanhar solicitações do atendimento 
 
 ## Fluxo de atendimento
 
-O usuário clica em **Abrir atendimento** no IPTV Flow. O worker abre uma sessão real do chatbot FUTEX em Chromium no servidor e espelha as mensagens dentro do app. O usuário digita manualmente nome, WhatsApp, dispositivo, marca e qualquer resposta pedida pelo chatbot. O app envia cada resposta à sessão, atualiza a conversa e identifica o bloco final de credenciais para exibi-lo com botões de cópia. O site FUTEX não abre em outra aba ou no celular.
+O usuário preenche nome, WhatsApp, dispositivo e marca no formulário próprio do IPTV Flow e clica em **Gerar teste grátis**. O worker abre o site original da FUTEX em Chromium no servidor, informa os dados e segue o atendimento para solicitar o teste. Se a FUTEX indicar um aplicativo, o IPTV Flow apresenta essa orientação e pede a confirmação de instalação ao usuário. Quando a FUTEX retorna o teste, o parser extrai os campos de acesso e o app mostra as credenciais com botões de cópia. O usuário utiliza somente a interface do IPTV Flow; o site FUTEX fica em segundo plano.
 
 O formato de credenciais não é fixo: o parser suporta rótulos dinâmicos como Código, Usuário, Senha, Servidor, MAC, PIN, Playlist, URL e também preserva o bloco final caso o site retorne dados sem rótulos.
 
@@ -80,7 +80,7 @@ O Vite encaminha `/api/worker/*` ao worker local em `127.0.0.1:8787`. Em desenvo
 
 ## Validação
 
-No painel, acesse **Configurações → Verificar conexão** e depois **Diagnosticar FUTEX**. O diagnóstico lê a página e lista os frames, textos, inputs e botões encontrados sem enviar dados nem gerar teste.
+No painel, acesse **Configurações → Verificar conexão** e depois **Diagnosticar FUTEX**. O diagnóstico lê a página e lista os frames, textos, inputs e botões encontrados sem enviar dados nem gerar teste. Depois de configurar o worker, faça uma solicitação real de teste para validar o fluxo completo.
 
 Execute os testes do parser:
 
@@ -95,7 +95,7 @@ O build e os testes verificam a aplicação e a extração de formatos de creden
 
 ## Fluxo somente pelo IPTV Flow
 
-A tela do painel não abre a FUTEX em outra aba. O worker mantém o navegador remoto e expõe somente o conteúdo da conversa e os controles necessários ao IPTV Flow. O usuário responde manualmente; o servidor não preenche nome, telefone, dispositivo, marca nem confirma etapas por conta própria.
+A tela do painel usa o formulário e a identidade visual do IPTV Flow. O worker mantém o navegador remoto da FUTEX e executa o atendimento com os dados fornecidos no formulário. A confirmação de instalação continua sendo feita pelo usuário dentro do IPTV Flow.
 
 ## Diagnóstico real da FUTEX
 

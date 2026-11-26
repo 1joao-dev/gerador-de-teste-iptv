@@ -131,6 +131,7 @@ function App() {
   const [selectedRequest, setSelectedRequest] = useState<TestRequest | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [confirmingApp, setConfirmingApp] = useState(false);
+  const [refreshingFlow, setRefreshingFlow] = useState(false);
   const [flowRequest, setFlowRequest] = useState<TestRequest | null>(null);
   const [flowStage, setFlowStage] = useState<"form" | "install" | "waiting" | "result">("form");
   const [brandOther, setBrandOther] = useState("");
@@ -299,6 +300,32 @@ function App() {
       setToast(error instanceof Error ? error.message : "Falha ao confirmar a instalação.");
     } finally {
       setConfirmingApp(false);
+    }
+  }
+
+  async function refreshFlowRequest() {
+    if (!API_BASE_URL || !flowRequest) {
+      setToast("A atualização ficará disponível quando a automação estiver conectada.");
+      return;
+    }
+    setRefreshingFlow(true);
+    try {
+      const response = await fetch(
+        API_BASE_URL.replace(/\/$/, "") + "/api/test-requests/" + encodeURIComponent(flowRequest.id),
+      );
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.message || "Não foi possível consultar o andamento.");
+      const updated: TestRequest = { ...flowRequest, ...result };
+      setFlowRequest(updated);
+      setRequests((current) => current.map((item) => item.id === updated.id ? updated : item));
+      if (updated.username || updated.password || updated.code) setFlowStage("result");
+      else if (updated.recommendedApp && updated.appInstalled !== true) setFlowStage("install");
+      else setFlowStage("waiting");
+      setToast("Status atualizado.");
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : "Falha ao consultar o andamento.");
+    } finally {
+      setRefreshingFlow(false);
     }
   }
 
@@ -537,7 +564,7 @@ function App() {
                       <>
                         <div className="flow-state-heading"><span className="step-number">04</span><div><h3>Solicitação em andamento</h3><p>Os dados foram enviados ao serviço de automação.</p></div><StatusPill status={flowRequest.status} /></div>
                         <div className="waiting-state"><span className="waiting-state-icon"><LoaderCircle size={25} className="spin" /></span><strong>Aguardando resposta da FUTEX</strong><p>{flowRequest.message || "Quando a FUTEX indicar o aplicativo ou retornar os dados do teste, eles aparecerão aqui."}</p></div>
-                        <button className="back-button" type="button" onClick={() => { setFlowStage("form"); setFlowRequest(null); }}>Voltar ao formulário</button>
+                        <div className="flow-wait-actions"><button className="secondary-button" type="button" onClick={() => void refreshFlowRequest()} disabled={refreshingFlow}>{refreshingFlow ? <LoaderCircle className="spin" size={15} /> : <RefreshCw size={15} />} Atualizar status</button><button className="back-button" type="button" onClick={() => { setFlowStage("form"); setFlowRequest(null); }}>Voltar ao formulário</button></div>
                       </>
                     )}
                     {flowStage === "result" && flowRequest && (

@@ -97,6 +97,10 @@ O build e os testes verificam a aplicação e a extração de formatos de creden
 
 A tela do painel não incorpora nem abre a FUTEX no celular. Toda a navegação Playwright acontece no worker. A recomendação do aplicativo, o andamento e o resultado são exibidos dentro do IPTV Flow. Em **Configurações**, a opção **Avançar automaticamente após indicar o aplicativo** faz o worker responder “Sim” à pergunta de instalação sem intervenção por solicitação. Ative somente quando essa resposta corresponder ao uso real; se ficar desligada, a confirmação aparece dentro do próprio IPTV Flow.
 
+## Diagnóstico real da FUTEX
+
+O workflow **FUTEX live diagnostic** abre o portal em um Chromium isolado, identifica o campo de mensagem e lê as mensagens renderizadas no Shadow DOM do chatbot. Ele não envia nome ou telefone e não gera um teste. O relatório fica como artefato na execução do GitHub Actions por 3 dias. Para executar novamente, use **Actions → FUTEX live diagnostic → Run workflow**.
+
 ## Segurança e limites
 
 - Não há bypass de CAPTCHA, login, bloqueios, rate limits ou outras proteções do site.

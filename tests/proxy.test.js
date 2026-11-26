@@ -42,7 +42,7 @@ test("proxy exige código privado do painel antes de encaminhar chamadas", async
     await handler({ method: "GET", query: { path: ["api", "health"] }, headers: {} }, missing);
     assert.equal(missing.statusCode, 503);
 
-    process.env.APP_ACCESS_CODE = "painel-secreto-de-teste";
+    process.env.APP_ACCESS_CODE = "painel-secreto-de-teste-com-mais-de-32-caracteres";
     const denied = mockResponse();
     await handler({ method: "GET", query: { path: ["api", "health"] }, headers: { "x-app-access-code": "errado" } }, denied);
     assert.equal(denied.statusCode, 401);
@@ -68,7 +68,7 @@ test("proxy encaminha apenas rotas permitidas e mantém token do worker no servi
   let forwarded;
 
   try {
-    process.env.APP_ACCESS_CODE = "painel-secreto-de-teste";
+    process.env.APP_ACCESS_CODE = "painel-secreto-de-teste-com-mais-de-32-caracteres";
     process.env.WORKER_API_URL = "https://worker.example";
     process.env.WORKER_API_TOKEN = "token-interno-do-worker";
     process.env.NODE_ENV = "production";
@@ -84,7 +84,7 @@ test("proxy encaminha apenas rotas permitidas e mantém token do worker no servi
     await handler({
       method: "GET",
       query: { path: ["api", "health"] },
-      headers: { "x-app-access-code": "painel-secreto-de-teste" },
+      headers: { "x-app-access-code": "painel-secreto-de-teste-com-mais-de-32-caracteres" },
     }, response);
 
     assert.equal(response.statusCode, 200);
@@ -95,7 +95,7 @@ test("proxy encaminha apenas rotas permitidas e mantém token do worker no servi
     await handler({
       method: "GET",
       query: { path: ["admin", "secrets"] },
-      headers: { "x-app-access-code": "painel-secreto-de-teste" },
+      headers: { "x-app-access-code": "painel-secreto-de-teste-com-mais-de-32-caracteres" },
     }, blocked);
     assert.equal(blocked.statusCode, 404);
   } finally {

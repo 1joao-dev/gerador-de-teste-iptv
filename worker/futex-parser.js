@@ -45,7 +45,10 @@ export function extractAccessDetails(text) {
     "dados do teste",
     "acesso liberado",
     "teste gerado",
+    "teste de 6 horas gerado",
+    "seu teste foi gerado",
     "seu teste já está ativo",
+    "aqui estão os dados",
   ];
   const markerIndex = markers.reduce((latest, marker) => Math.max(latest, lower.lastIndexOf(marker)), -1);
   if (markerIndex < 0) return [];

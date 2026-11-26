@@ -12,6 +12,7 @@ import {
   Wifi,
   X,
 } from "lucide-react";
+import { TEST_API_URL } from "./config";
 
 type Step =
   | "device"
@@ -63,7 +64,6 @@ const appOptions = [
   "⬅️ Voltar",
 ];
 
-const TEST_API_URL = (import.meta.env.VITE_TEST_API_URL ?? "").trim();
 
 function getTime() {
   return new Intl.DateTimeFormat("pt-BR", {

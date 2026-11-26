@@ -45,6 +45,7 @@ Variáveis principais:
 NODE_ENV=production
 PORT=8787
 DATA_DIR=/data
+DATA_ENCRYPTION_KEY=chave-hexadecimal-de-64-caracteres
 API_TOKEN=token-aleatorio-longo
 FUTEX_URL=https://futex.com.br/teste/
 FUTEX_AUTOMATION_ENABLED=false
@@ -54,7 +55,7 @@ MAX_ACTIVE_SESSIONS=1
 MAX_SESSION_MINUTES=30
 ```
 
-Gere um token com `openssl rand -hex 32`. Configure o mesmo valor em `API_TOKEN` no worker e `WORKER_API_TOKEN` na Vercel. Mantenha `FUTEX_AUTOMATION_ENABLED=false` até executar o diagnóstico e validar o fluxo real.
+Gere duas chaves independentes com `openssl rand -hex 32`: uma para `API_TOKEN` (use o mesmo valor em `WORKER_API_TOKEN` na Vercel) e outra para `DATA_ENCRYPTION_KEY`. Esta segunda chave criptografa nome, telefone e credenciais no histórico persistido. Guarde-a com segurança e nunca a troque enquanto houver dados salvos. Mantenha `FUTEX_AUTOMATION_ENABLED=false` até executar o diagnóstico e validar o fluxo real.
 
 ## Desenvolvimento local
 
@@ -97,6 +98,6 @@ O build e os testes verificam a aplicação e a extração de formatos de creden
 - Não há bypass de CAPTCHA, login, bloqueios, rate limits ou outras proteções do site.
 - Uma sessão Playwright ativa por vez e intervalo mínimo de 30 segundos entre novas solicitações.
 - Sessões expiram após 30 minutos de inatividade.
-- O histórico e os dados de acesso ficam no volume privado do worker; proteja o volume e o acesso administrativo.
+- Nome, telefone e credenciais são criptografados com AES-256-GCM antes de serem gravados no histórico do volume privado do worker. Proteja também as chaves e o volume.
 - Reiniciar o worker encerra sessões abertas; as solicitações interrompidas ficam marcadas para ação manual.
 - Para múltiplos usuários, migre o histórico para PostgreSQL e implemente autenticação individual.

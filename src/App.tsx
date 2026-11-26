@@ -220,7 +220,7 @@ function App() {
         const request: TestRequest = {
           id: result.id ?? makeId(),
           ...payload,
-          status: result.status ?? (result.recommendedApp ? "awaiting_app" : "queued"),
+          status: result.status ?? (result.username || result.password || result.code ? "completed" : result.recommendedApp ? "awaiting_app" : "queued"),
           createdAt: result.createdAt ?? new Date().toISOString(),
           username: result.username,
           password: result.password,
@@ -281,7 +281,7 @@ function App() {
         ...flowRequest,
         ...result,
         appInstalled: installed,
-        status: result.status ?? (installed ? "running" : "awaiting_app"),
+        status: result.status ?? (result.username || result.password || result.code ? "completed" : installed ? "running" : "awaiting_app"),
       };
       setFlowRequest(updated);
       setRequests((current) => current.map((item) => item.id === updated.id ? updated : item));
@@ -331,7 +331,8 @@ function App() {
 
   async function copyResult(request: TestRequest) {
     const text = [
-      request.code ? "Código: " + request.code : "",
+      request.recommendedApp ? "Aplicativo: " + request.recommendedApp : "",
+      request.code ? "Código Uniplay: " + request.code : "",
       request.username ? "Usuário: " + request.username : "",
       request.password ? "Senha: " + request.password : "",
       request.duration ? "Duração: " + request.duration : "",

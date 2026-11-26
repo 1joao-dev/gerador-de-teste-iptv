@@ -168,7 +168,10 @@ app.get("/health", (_req, res) => {
   res.json({ status: "ok", service: "iptv-flow-worker" });
 });
 
-app.use("/api", requireApiToken);
+app.use("/api", (req, res, next) => {
+  res.setHeader("Cache-Control", "no-store");
+  return requireApiToken(req, res, next);
+});
 
 app.get("/api/health", (_req, res) => {
   res.setHeader("Cache-Control", "no-store");

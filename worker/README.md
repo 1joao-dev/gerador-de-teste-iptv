@@ -113,10 +113,10 @@ Use somente uma réplica do worker nesta versão, pois as sessões do Chromium f
 3. Em **Environment Variables**, configure:
    - `WORKER_API_URL=https://SEU-WORKER.up.railway.app`
    - `WORKER_API_TOKEN=<o mesmo token de API_TOKEN>`
-   - `APP_ACCESS_CODE=<código privado para abrir o painel>`
+   - `APP_ACCESS_CODE=<código aleatório com pelo menos 32 caracteres>`
 4. Faça o deploy.
 
-A pasta `api/worker/[...path].js` é um proxy server-side. O navegador chama o mesmo domínio da Vercel e nunca recebe o token do worker. O painel pede o `APP_ACCESS_CODE`, que funciona como proteção simples para uso administrativo privado. Não crie variáveis `VITE_*` com chaves secretas.
+A pasta `api/worker/[...path].js` é um proxy server-side. O navegador chama o mesmo domínio da Vercel e nunca recebe o token do worker. O painel pede o `APP_ACCESS_CODE`, que deve ter pelo menos 32 caracteres aleatórios e funciona como proteção simples para uso administrativo privado. Não crie variáveis `VITE_*` com chaves secretas.
 
 ## Testes e limites conhecidos
 

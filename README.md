@@ -13,7 +13,7 @@ Painel web mobile-first para organizar solicitações de testes IPTV e acompanha
 
 ## Importante: estado atual da integração
 
-A interface está funcional para navegação, seleção das opções de dispositivo e marca observadas nas capturas, criação de rascunhos locais, pesquisa, confirmação de instalação do aplicativo recomendado (quando a API retornar essa etapa) e apresentação das credenciais retornadas pelo backend. **Sem backend configurado, o sistema salva apenas um rascunho; não gera credenciais.** **Sem um backend configurado, o botão salva apenas um rascunho no navegador; nenhum teste é solicitado ou gerado.**
+A interface está funcional para navegação, seleção das opções de dispositivo e marca observadas nas capturas, criação de rascunhos locais, pesquisa, confirmação de instalação do aplicativo recomendado (quando a API retornar essa etapa) e apresentação de campos de acesso dinâmicos retornados pelo backend. **Sem backend configurado, o sistema salva apenas um rascunho; não gera credenciais.**
 
 A integração real deve ser feita por um backend/worker separado. O frontend envia:
 
@@ -64,20 +64,29 @@ A interface consulta o andamento de uma solicitação em aberto por:
 GET /api/test-requests/{id}
 ```
 
-Quando a FUTEX concluir o fluxo, o backend deve retornar os dados reais:
+O formato de acesso muda conforme o dispositivo e o aplicativo. Por isso, o frontend não presume que todo teste terá Código Uniplay, usuário e senha. O backend deve normalizar os dados retornados pela FUTEX em uma lista dinâmica `accessDetails`, com o rótulo e o valor de cada campo. Assim, o app exibe e permite copiar somente os campos que realmente vierem na resposta.
+
+Exemplo ilustrativo de resposta (os campos e valores reais dependem do dispositivo escolhido e do retorno da FUTEX):
 
 ```json
 {
   "id": "request-id",
   "status": "completed",
-  "recommendedApp": "Zuxo Player",
-  "code": "codigo-retornado-pela-futex",
-  "username": "usuario-retornado-pela-futex",
-  "password": "senha-retornada-pela-futex",
+  "device": "Smart TV",
+  "brand": "LG",
+  "recommendedApp": "Aplicativo retornado pela FUTEX",
+  "resultTitle": "Dados do seu teste",
   "duration": "6 horas",
-  "message": "Teste ativo."
+  "accessDetails": [
+    { "label": "Código", "value": "valor-retornado-pela-futex" },
+    { "label": "Usuário", "value": "usuario-retornado-pela-futex" },
+    { "label": "Senha", "value": "senha-retornada-pela-futex" }
+  ],
+  "message": "Orientação retornada pela FUTEX."
 }
 ```
+
+Se um tipo de aparelho retornar URL, MAC, PIN, playlist ou outros dados, o backend envia esses mesmos itens em `accessDetails` com rótulos adequados. Não é necessário alterar a interface para cada novo formato. Os campos antigos `code`, `username` e `password` continuam aceitos para compatibilidade.
 
 Para sincronizar o histórico, o backend também deve implementar:
 

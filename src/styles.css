@@ -525,3 +525,99 @@ td:first-child small { margin-top: 4px; color: #68728a; font-size: 8px; }
   accent-color: #9c83ff;
   cursor: pointer;
 }
+
+
+/* Manual FUTEX chat embedded in the IPTV Flow interface */
+.futex-start-card { display: flex; flex-direction: column; }
+.futex-start-illustration {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 10px 0 18px;
+  padding: 17px;
+  border: 1px solid rgba(150,128,255,.2);
+  border-radius: 13px;
+  background: linear-gradient(120deg, rgba(136,108,255,.12), rgba(136,108,255,.035));
+}
+.futex-start-illustration > span {
+  display: grid;
+  width: 48px;
+  height: 48px;
+  flex: 0 0 auto;
+  place-items: center;
+  color: #c1b4ff;
+  border: 1px solid rgba(165,145,255,.22);
+  border-radius: 13px;
+  background: rgba(143,117,255,.12);
+}
+.futex-start-illustration > div { display: grid; gap: 5px; }
+.futex-start-illustration strong { color: #f0edff; font-family: Manrope, sans-serif; font-size: 14px; }
+.futex-start-illustration small { color: #8c96ad; font-size: 9px; line-height: 1.55; }
+.futex-start-list { display: grid; gap: 12px; margin: 0; padding: 0; list-style: none; }
+.futex-start-list li { display: flex; align-items: flex-start; gap: 9px; color: #aab3c8; font-size: 10px; line-height: 1.5; }
+.futex-start-list svg { flex: 0 0 auto; color: #6ed8b0; }
+.futex-chat-shell {
+  display: flex;
+  min-height: 500px;
+  flex-direction: column;
+  gap: 12px;
+}
+.futex-chat-topline { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.futex-chat-topline > span { display: inline-flex; align-items: center; gap: 7px; color: #8d9ab0; font-size: 9px; }
+.futex-chat-topline i { width: 7px; height: 7px; border-radius: 50%; background: #55d5a5; box-shadow: 0 0 10px rgba(85,213,165,.35); }
+.futex-chat-messages {
+  display: flex;
+  min-height: 300px;
+  max-height: min(58vh, 560px);
+  flex: 1;
+  flex-direction: column;
+  gap: 11px;
+  overflow-y: auto;
+  padding: 15px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #090e18;
+  overscroll-behavior: contain;
+}
+.futex-chat-message {
+  width: fit-content;
+  max-width: min(86%, 460px);
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+.futex-chat-message.from-bot { align-self: flex-start; border-top-left-radius: 4px; background: #151c2b; }
+.futex-chat-message.from-user { align-self: flex-end; border-color: rgba(154,130,255,.28); border-top-right-radius: 4px; background: rgba(128,100,237,.16); }
+.futex-chat-message > span { display: block; margin-bottom: 5px; color: #9d8be9; font-size: 8px; font-weight: 800; letter-spacing: .5px; }
+.futex-chat-message.from-user > span { color: #c4b6ff; text-align: right; }
+.futex-chat-message p { margin: 0; color: #d8deeb; font-size: 10px; line-height: 1.65; white-space: pre-wrap; overflow-wrap: anywhere; }
+.chat-loading, .chat-typing { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 60px; color: #8994ab; font-size: 9px; }
+.chat-typing { min-height: auto; justify-content: flex-start; padding: 5px 2px; color: #a995ff; }
+.futex-chat-options { display: flex; flex-wrap: wrap; gap: 7px; }
+.futex-chat-options .choice-chip { border-style: solid; }
+.futex-chat-composer { display: flex; align-items: flex-end; gap: 9px; padding: 9px; border: 1px solid var(--line-strong); border-radius: 12px; background: #0d111c; }
+.futex-chat-composer textarea {
+  width: 100%;
+  min-height: 43px;
+  max-height: 120px;
+  flex: 1;
+  resize: vertical;
+  padding: 11px 9px;
+  color: #e6e8f2;
+  outline: none;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-size: 10px;
+  line-height: 1.5;
+}
+.futex-chat-composer textarea::placeholder { color: #66718a; }
+.futex-chat-composer .primary-button { width: 42px; min-width: 42px; min-height: 42px; padding: 0; justify-content: center; }
+.futex-chat-footnote { display: flex; align-items: center; gap: 7px; margin: 0; color: #738099; font-size: 8px; }
+.futex-chat-footnote svg { flex: 0 0 auto; color: #6ecaa7; }
+@media (max-width: 680px) {
+  .futex-chat-shell { min-height: 440px; }
+  .futex-chat-messages { min-height: 260px; max-height: 54vh; padding: 11px; }
+  .futex-chat-message { max-width: 92%; }
+  .futex-start-illustration { padding: 13px; }
+}

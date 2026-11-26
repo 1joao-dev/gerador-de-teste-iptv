@@ -212,6 +212,7 @@ function App() {
   }), [requests]);
 
   const automationReady = workerHealth === "online" && workerAutomationEnabled;
+  const chatPending = sendingChat || flowRequest?.message?.startsWith("Enviando sua resposta") === true;
 
   const filteredRequests = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
@@ -329,7 +330,7 @@ function App() {
   }
 
   async function sendChatReply(message = chatDraft, option?: string) {
-    if (!flowRequest || !flowRequest.manualChat || sendingChat) return;
+    if (!flowRequest || !flowRequest.manualChat || chatPending) return;
     const text = message.trim();
     if (!option && !text) return;
     setSendingChat(true);
@@ -651,12 +652,12 @@ function App() {
                             </div>
                           ))}
                           {(!flowRequest.chatMessages || flowRequest.chatMessages.length === 0) && <div className="chat-loading"><LoaderCircle size={18} className="spin" /> Carregando conversa da FUTEX...</div>}
-                          {flowRequest.status === "running" && sendingChat && <div className="chat-typing">FUTEX está respondendo...</div>}
+                          {flowRequest.status === "running" && chatPending && <div className="chat-typing">FUTEX está respondendo...</div>}
                         </div>
-                        {(flowRequest.chatOptions || []).length > 0 && <div className="futex-chat-options">{flowRequest.chatOptions?.map((option) => <button type="button" className="choice-chip" key={option} disabled={sendingChat} onClick={() => void sendChatReply("", option)}>{option}</button>)}</div>}
+                        {(flowRequest.chatOptions || []).length > 0 && <div className="futex-chat-options">{flowRequest.chatOptions?.map((option) => <button type="button" className="choice-chip" key={option} disabled={chatPending} onClick={() => void sendChatReply("", option)}>{option}</button>)}</div>}
                         <form className="futex-chat-composer" onSubmit={(event) => { event.preventDefault(); void sendChatReply(); }}>
-                          <textarea value={chatDraft} onChange={(event) => setChatDraft(event.target.value)} placeholder={flowRequest.chatInputPlaceholder || "Digite sua resposta..."} rows={2} maxLength={1000} disabled={sendingChat || flowRequest.status === "completed"} />
-                          <button className="primary-button" type="submit" disabled={sendingChat || !chatDraft.trim() || flowRequest.status === "completed"} aria-label="Enviar resposta">{sendingChat ? <LoaderCircle size={16} className="spin" /> : <ArrowRight size={16} />}</button>
+                          <textarea value={chatDraft} onChange={(event) => setChatDraft(event.target.value)} placeholder={flowRequest.chatInputPlaceholder || "Digite sua resposta..."} rows={2} maxLength={1000} disabled={chatPending || flowRequest.status === "completed"} />
+                          <button className="primary-button" type="submit" disabled={chatPending || !chatDraft.trim() || flowRequest.status === "completed"} aria-label="Enviar resposta">{chatPending ? <LoaderCircle size={16} className="spin" /> : <ArrowRight size={16} />}</button>
                         </form>
                         <p className="futex-chat-footnote"><ShieldCheck size={13} /> A conversa acontece aqui. O site FUTEX não abre em outra aba.</p>
                       </section>
@@ -695,7 +696,7 @@ function App() {
                 )}
 
                 <aside className="new-test-aside">
-                  <div className="panel summary-card"><div className="summary-top"><span className="summary-icon"><Sparkles size={17} /></span><span>RESUMO</span></div><h3>Dados do atendimento</h3><p>Informações que serão enviadas ao fluxo automatizado.</p><div className="summary-items"><div><span>Cliente</span><strong>{form.customerName || flowRequest?.customerName || "Não informado"}</strong></div><div><span>WhatsApp</span><strong>{form.contact || flowRequest?.contact || "Não informado"}</strong></div><div><span>Onde vai assistir</span><strong>{form.device || flowRequest?.device || "Não selecionado"}</strong></div><div><span>Marca</span><strong>{(form.brand === "Outra (digitar)" ? brandOther : form.brand) || flowRequest?.brand || "Não selecionada"}</strong></div></div><div className="summary-foot"><ShieldCheck size={15} /><span>Credenciais só serão mostradas quando forem retornadas pelo serviço real.</span></div></div>
+                  <div className="panel summary-card"><div className="summary-top"><span className="summary-icon"><Sparkles size={17} /></span><span>RESUMO</span></div><h3>Resumo da sessão</h3><p>Acompanhe o atendimento e o resultado recebido.</p><div className="summary-items"><div><span>Sessão</span><strong>{flowRequest ? flowRequest.id.slice(0, 8).toUpperCase() : "Não iniciada"}</strong></div><div><span>Status</span><strong>{flowRequest ? statusLabel(flowRequest.status) : "Aguardando"}</strong></div><div><span>Etapa</span><strong>{flowRequest?.manualChat ? "Conversa manual" : flowRequest ? "Atendimento" : "Não iniciada"}</strong></div><div><span>Resultado</span><strong>{flowRequest && hasTestResult(flowRequest) ? "Teste recebido" : "Aguardando teste"}</strong></div></div><div className="summary-foot"><ShieldCheck size={15} /><span>As credenciais aparecem aqui quando a FUTEX concluir o atendimento.</span></div></div>
                   <div className="info-card"><div className="info-card-icon"><CircleHelp size={18} /></div><div><strong>Fluxo confirmado</strong><p>Você conversa manualmente com o chatbot. O IPTV Flow apenas acompanha a conversa e identifica os dados do teste quando forem apresentados.</p></div></div>
                 </aside>
               </div>

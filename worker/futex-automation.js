@@ -182,6 +182,21 @@ export async function inspectFutexPage() {
   try {
     await page.goto(FUTEX_URL, { waitUntil: "domcontentloaded", timeout: 35_000 });
     await page.waitForTimeout(3_000);
+
+    const initialText = await visibleText(page);
+    if (!/como posso.{0,30}chamar|qual(?: é)? o? seu nome/i.test(initialText)) {
+      const startOptions = ["Fazer teste grátis", "Iniciar teste grátis", "Teste grátis", "Gerar teste", "Iniciar atendimento", "Atendimento"];
+      for (const option of startOptions) {
+        try {
+          await clickChoiceAnyFrame(page, [option]);
+          await page.waitForTimeout(1_500);
+          break;
+        } catch {
+          // O diagnóstico não preenche campos nem confirma a geração do teste.
+        }
+      }
+    }
+
     const frames = await Promise.all(page.frames().slice(0, 8).map(async (frame) => {
       const [text, controls] = await Promise.all([
         visibleText(frame),

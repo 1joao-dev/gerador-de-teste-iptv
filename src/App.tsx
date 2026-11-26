@@ -103,7 +103,7 @@ function FlowMark({ size = 32 }: { size?: number }) {
 }
 
 function formatPhone(value: string) {
-  const digits = value.replace(/\\D/g, "").slice(0, 11);
+  const digits = value.replace(/\D/g, "").slice(0, 11);
   if (digits.length <= 2) return digits ? "(" + digits : "";
   if (digits.length <= 7) return "(" + digits.slice(0, 2) + ") " + digits.slice(2);
   return "(" + digits.slice(0, 2) + ") " + digits.slice(2, 7) + "-" + digits.slice(7);
@@ -228,6 +228,7 @@ function App() {
   }, [requests, searchTerm]);
 
   function navigate(nextPage: Page) {
+    if (nextPage === "new") { setFlowStage("form"); setFlowRequest(null); }
     setPage(nextPage);
     setMobileMenuOpen(false);
     setSelectedRequest(null);
@@ -293,7 +294,7 @@ function App() {
     event.preventDefault();
     const customerName = form.customerName.trim();
     const contact = form.contact.trim();
-    const phoneDigits = contact.replace(/\\D/g, "");
+    const phoneDigits = contact.replace(/\D/g, "");
     const device = form.device;
     const brand = form.brand === "Outra" ? form.brandOther.trim() : form.brand;
 
@@ -649,7 +650,7 @@ function App() {
                       {!automationReady && <p className="form-availability-note">{workerHealth === "checking" ? "Verificando conexão com o serviço..." : workerHealth === "offline" ? "Serviço temporariamente indisponível. Tente novamente mais tarde." : "A geração será liberada quando a integração estiver ativa."}</p>}
                     </form>
                   </section>
-                : (
+                ) : (
                   <section className="panel flow-state-panel">
                     {flowStage === "install" && flowRequest && (
                       <>
@@ -685,8 +686,8 @@ function App() {
                 )}
 
                 <aside className="new-test-aside">
-                  <div className="panel summary-card"><div className="summary-top"><span className="summary-icon"><Sparkles size={17} /></span><span>RESUMO</span></div><h3>Resumo da sessão</h3><p>Acompanhe o atendimento e o resultado recebido.</p><div className="summary-items"><div><span>Sessão</span><strong>{flowRequest ? flowRequest.id.slice(0, 8).toUpperCase() : "Não iniciada"}</strong></div><div><span>Status</span><strong>{flowRequest ? statusLabel(flowRequest.status) : "Aguardando"}</strong></div><div><span>Etapa</span><strong>{flowRequest?.manualChat ? "Conversa manual" : flowRequest ? "Atendimento" : "Não iniciada"}</strong></div><div><span>Resultado</span><strong>{flowRequest && hasTestResult(flowRequest) ? "Teste recebido" : "Aguardando teste"}</strong></div></div><div className="summary-foot"><ShieldCheck size={15} /><span>As credenciais aparecem aqui quando a FUTEX concluir o atendimento.</span></div></div>
-                  <div className="info-card"><div className="info-card-icon"><CircleHelp size={18} /></div><div><strong>Fluxo confirmado</strong><p>Você conversa manualmente com o chatbot. O IPTV Flow apenas acompanha a conversa e identifica os dados do teste quando forem apresentados.</p></div></div>
+                  <div className="panel summary-card"><div className="summary-top"><span className="summary-icon"><Sparkles size={17} /></span><span>RESUMO</span></div><h3>Teste grátis de 6 horas</h3><p>Uma experiência simples, com a tecnologia original da FUTEX trabalhando em segundo plano.</p><div className="summary-items"><div><span>Etapa 01</span><strong>Seus dados</strong></div><div><span>Etapa 02</span><strong>Processamento FUTEX</strong></div><div><span>Etapa 03</span><strong>Credenciais na tela</strong></div></div><div className="summary-foot"><ShieldCheck size={15} /><span>Você não precisa abrir o site da FUTEX. O resultado aparece aqui no IPTV Flow.</span></div></div>
+                  <div className="info-card"><div className="info-card-icon"><CircleHelp size={18} /></div><div><strong>Como funciona</strong><p>Você preenche o formulário do IPTV Flow. Nosso serviço envia os dados ao atendimento original da FUTEX, acompanha a geração e traz as credenciais para esta tela.</p></div></div>
                 </aside>
               </div>
             </section>

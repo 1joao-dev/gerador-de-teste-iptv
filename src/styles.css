@@ -269,6 +269,70 @@ td:first-child small { margin-top: 4px; color: #68728a; font-size: 8px; }
 .result-box p { margin: 10px 0 0; color: #aab7b6; font-size: 9px; }
 .result-box b { color: #e1f1e9; }
 
+
+.status-awaiting_app { color: #e5bd78; border-color: rgba(229,189,120,.18); background: rgba(229,189,120,.08); }
+
+.choice-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.choice-chip { display: inline-flex; min-height: 35px; align-items: center; gap: 7px; padding: 0 12px; color: #aeb5ca; border: 1px dashed rgba(139, 202, 190, .48); border-radius: 999px; background: rgba(255,255,255,.018); font-size: 9px; font-weight: 600; cursor: pointer; transition: .16s ease; }
+.choice-chip:hover { color: #d8d0ff; border-color: rgba(159,137,255,.55); background: rgba(143,119,255,.06); }
+.choice-chip.selected { color: #d3caff; border-style: solid; border-color: rgba(159,137,255,.72); background: rgba(143,119,255,.14); }
+.choice-chip.selected svg { color: #9c85ff; }
+.brand-other-field { margin-top: 14px; }
+
+.flow-state-panel { display: flex; min-height: 430px; flex-direction: column; }
+.flow-state-heading { display: flex; align-items: center; gap: 11px; padding-bottom: 17px; border-bottom: 1px solid var(--line); }
+.flow-state-heading > div { min-width: 0; flex: 1; }
+.flow-state-heading h3 { margin: 0; color: #e7e8f2; font-family: Manrope, sans-serif; font-size: 13px; }
+.flow-state-heading p { margin: 4px 0 0; color: #7f899f; font-size: 9px; line-height: 1.5; }
+.app-recommendation-card { display: flex; align-items: center; gap: 14px; margin-top: 22px; padding: 17px; border: 1px solid rgba(150,128,255,.2); border-radius: 13px; background: linear-gradient(120deg, rgba(136,108,255,.12), rgba(136,108,255,.035)); }
+.app-recommendation-icon { display: grid; width: 48px; height: 48px; flex: 0 0 auto; place-items: center; color: #c1b4ff; border: 1px solid rgba(165,145,255,.22); border-radius: 13px; background: rgba(143,117,255,.12); }
+.app-recommendation-card > div { min-width: 0; }
+.app-recommendation-card small { display: block; color: #9987db; font-size: 8px; font-weight: 800; letter-spacing: 1.1px; }
+.app-recommendation-card strong { display: block; margin-top: 5px; color: #f0edff; font-family: Manrope, sans-serif; font-size: 17px; }
+.app-recommendation-card p { margin: 4px 0 0; color: #8c96ad; font-size: 9px; }
+.guide-link { align-self: flex-start; margin-top: 13px; }
+.flow-question { margin-top: 24px; padding: 15px; border: 1px solid var(--line); border-radius: 11px; background: rgba(255,255,255,.018); }
+.flow-question strong { color: #e4e5f0; font-size: 11px; }
+.flow-question p { margin: 5px 0 0; color: #7e899f; font-size: 9px; line-height: 1.5; }
+.flow-action-row { display: flex; justify-content: flex-end; gap: 9px; margin-top: auto; padding-top: 22px; }
+.flow-action-row .primary-button, .flow-action-row .secondary-button { min-height: 39px; }
+.waiting-state { display: flex; flex: 1; flex-direction: column; align-items: center; justify-content: center; padding: 42px 20px; text-align: center; }
+.waiting-state-icon { display: grid; width: 57px; height: 57px; margin-bottom: 15px; place-items: center; color: #a995ff; border: 1px solid rgba(153,132,255,.2); border-radius: 17px; background: rgba(143,117,255,.09); }
+.waiting-state strong { color: #e5e6f1; font-size: 12px; }
+.waiting-state p { max-width: 360px; margin: 7px 0 0; color: #8791a8; font-size: 9px; line-height: 1.65; }
+.success-duration { display: flex; align-items: center; gap: 10px; margin-top: 19px; padding: 12px 14px; color: #6cddb4; border: 1px solid rgba(94,216,169,.17); border-radius: 11px; background: rgba(94,216,169,.06); }
+.success-duration > div { display: flex; flex-direction: column; gap: 3px; }
+.success-duration strong { color: #8ce5c1; font-size: 10px; }
+.success-duration span { color: #a3bdb2; font-size: 9px; }
+.credential-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 9px; margin-top: 13px; }
+.credential-card { min-width: 0; padding: 13px; border: 1px solid var(--line-strong); border-radius: 10px; background: rgba(255,255,255,.02); }
+.credential-card > span { display: block; color: #7c879f; font-size: 7px; font-weight: 800; letter-spacing: .9px; }
+.credential-card > strong { display: block; overflow-wrap: anywhere; margin-top: 9px; color: #e7e8f2; font-family: Manrope, sans-serif; font-size: 12px; }
+.credential-card > button { display: inline-flex; align-items: center; gap: 5px; margin-top: 10px; padding: 0; color: #a995ff; border: 0; background: transparent; font-size: 8px; font-weight: 700; cursor: pointer; }
+.copy-all-button { align-self: flex-start; margin-top: 13px; }
+.result-note { display: flex; align-items: flex-start; gap: 9px; margin: 16px 0; padding: 12px; color: #e3bd7b; border: 1px solid rgba(232,189,114,.14); border-radius: 10px; background: rgba(232,189,114,.055); }
+.result-note svg { flex: 0 0 auto; margin-top: 1px; }
+.result-note p { margin: 0; color: #b6a98e; font-size: 8px; line-height: 1.6; }
+.result-note strong { color: #f0d29b; }
+.flow-state-panel > .back-button { align-self: flex-start; margin-top: auto; }
+
+@media (max-width: 680px) {
+  .choice-chips { gap: 7px; }
+  .choice-chip { min-height: 34px; padding: 0 10px; font-size: 8px; }
+  .flow-state-panel { min-height: 400px; }
+  .flow-state-heading { align-items: flex-start; flex-wrap: wrap; }
+  .flow-state-heading .status-pill { margin-left: 42px; }
+  .app-recommendation-card { padding: 13px; }
+  .app-recommendation-card strong { font-size: 15px; }
+  .flow-action-row { flex-direction: column-reverse; }
+  .flow-action-row button { width: 100%; }
+  .credential-grid { grid-template-columns: 1fr; }
+  .credential-card { display: grid; grid-template-columns: 1fr auto; align-items: center; column-gap: 10px; }
+  .credential-card > span { grid-column: 1 / -1; }
+  .credential-card > strong { margin-top: 6px; }
+  .credential-card > button { margin-top: 6px; }
+}
+
 .settings-layout { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; gap: 14px; }
 .settings-panel { padding: 20px; }
 .settings-heading { display: flex; align-items: center; gap: 11px; padding-bottom: 17px; border-bottom: 1px solid var(--line); }

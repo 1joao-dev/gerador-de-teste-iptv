@@ -224,7 +224,7 @@ export async function inspectFutexPage() {
               rootText: node.tagName === "TEXTAREA" ? (root.textContent || "").trim().slice(0, 8_000) : undefined,
               rootHtml: node.tagName === "TEXTAREA" && isShadowRoot ? root.innerHTML.slice(0, 16_000) : undefined,
             };
-          }),
+          })),
         frame.locator("body").evaluate((body) => {
           const candidates = [];
           const visit = (root, depth = 0) => {

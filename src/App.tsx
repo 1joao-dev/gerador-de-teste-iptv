@@ -70,26 +70,6 @@ type TestRequest = {
 
 const APP_ACCESS_CODE_STORAGE_KEY = "iptv-flow-app-access-code-v1";
 
-const devices = [
-  { label: "Smart TV", detail: "Televisores inteligentes", icon: Tv },
-  { label: "Android TV", detail: "Sistema Android para TV", icon: Monitor },
-  { label: "Roku TV", detail: "Televisores com Roku", icon: Tv },
-  { label: "TV Box", detail: "Box e aparelhos Android", icon: Monitor },
-  { label: "Celular Android", detail: "Smartphones Android", icon: Smartphone },
-  { label: "iPhone / iPad", detail: "Dispositivos Apple", icon: Smartphone },
-  { label: "Computador", detail: "Windows ou macOS", icon: Command },
-  { label: "Fire Stick", detail: "Amazon Fire TV Stick", icon: RadioTower },
-  { label: "Xbox", detail: "Console Xbox", icon: Monitor },
-  { label: "XCIPTV", detail: "Aplicativo XCIPTV", icon: Smartphone },
-  { label: "IPTV Smarters", detail: "Aplicativo IPTV Smarters", icon: Smartphone },
-  { label: "Lista M3U", detail: "Reprodutor compatível com M3U", icon: Monitor },
-  { label: "SS IPTV", detail: "Aplicativo SS IPTV", icon: Tv },
-  { label: "Duplecast", detail: "Aplicativo Duplecast", icon: Smartphone },
-];
-
-const brands = ["Samsung", "LG", "TCL", "Sony", "Philips", "Panasonic", "Philco", "AOC", "Roku", "Outra (digitar)"];
-
-
 function formatDate(value: string) {
   return new Intl.DateTimeFormat("pt-BR", {
     day: "2-digit",
@@ -97,14 +77,6 @@ function formatDate(value: string) {
     hour: "2-digit",
     minute: "2-digit",
   }).format(new Date(value));
-}
-
-function formatPhone(value: string) {
-  const digits = value.replace(/\D/g, "").slice(0, 11);
-  if (digits.length <= 2) return digits ? "(" + digits : "";
-  if (digits.length <= 6) return "(" + digits.slice(0, 2) + ") " + digits.slice(2);
-  if (digits.length <= 10) return "(" + digits.slice(0, 2) + ") " + digits.slice(2, 6) + "-" + digits.slice(6);
-  return "(" + digits.slice(0, 2) + ") " + digits.slice(2, 7) + "-" + digits.slice(7);
 }
 
 function makeId() {
@@ -170,13 +142,6 @@ function App() {
   const [futexDiagnostic, setFutexDiagnostic] = useState("");
   const [flowRequest, setFlowRequest] = useState<TestRequest | null>(null);
   const [flowStage, setFlowStage] = useState<"form" | "chat" | "install" | "waiting" | "result">("form");
-  const [brandOther, setBrandOther] = useState("");
-  const [form, setForm] = useState({
-    customerName: "",
-    contact: "",
-    device: "",
-    brand: "",
-  });
 
   useEffect(() => {
     try {
@@ -277,10 +242,6 @@ function App() {
     } finally {
       setDiagnosingFutex(false);
     }
-  }
-
-  function updateForm(field: keyof typeof form, value: string) {
-    setForm((current) => ({ ...current, [field]: value }));
   }
 
   async function submitRequest(event?: FormEvent<HTMLFormElement>) {

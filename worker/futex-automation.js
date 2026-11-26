@@ -1,5 +1,5 @@
 import { chromium } from "playwright";
-import { extractAccessDetails, extractRecommendedApp, extractResult } from "./futex-parser.js";
+import { extractRecommendedApp, extractResult } from "./futex-parser.js";
 
 const FUTEX_URL = process.env.FUTEX_URL || "https://futex.com.br/teste/";
 const HEADLESS = process.env.FUTEX_HEADLESS !== "false";

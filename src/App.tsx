@@ -62,6 +62,7 @@ type TestRequest = {
 };
 
 const STORAGE_KEY = "iptv-automator-requests-v1";
+const APP_ACCESS_CODE_STORAGE_KEY = "iptv-flow-app-access-code-v1";
 
 const devices = [
   { label: "Smart TV", detail: "Televisores inteligentes", icon: Tv },
@@ -154,6 +155,8 @@ function App() {
   const [confirmingApp, setConfirmingApp] = useState(false);
   const [refreshingFlow, setRefreshingFlow] = useState(false);
   const [workerHealth, setWorkerHealth] = useState<"checking" | "online" | "offline">("checking");
+  const [appAccessCode, setAppAccessCode] = useState("");
+  const [appAccessCodeDraft, setAppAccessCodeDraft] = useState("");
   const [workerAutomationEnabled, setWorkerAutomationEnabled] = useState(false);
   const [diagnosingFutex, setDiagnosingFutex] = useState(false);
   const [futexDiagnostic, setFutexDiagnostic] = useState("");
@@ -171,6 +174,9 @@ function App() {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved) setRequests(JSON.parse(saved) as TestRequest[]);
+      const savedAccessCode = localStorage.getItem(APP_ACCESS_CODE_STORAGE_KEY) ?? "";
+      setAppAccessCode(savedAccessCode);
+      setAppAccessCodeDraft(savedAccessCode);
     } catch {
       setRequests([]);
     }
@@ -223,13 +229,14 @@ function App() {
 
   function apiRequest(path: string, options: RequestInit = {}) {
     const headers = new Headers(options.headers || {});
+    if (appAccessCode) headers.set("x-app-access-code", appAccessCode);
     if (options.body && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
     return fetch(API_BASE_URL + path, { ...options, headers, cache: "no-store" });
   }
 
   async function checkWorkerHealth(silent = false) {
     try {
-      const response = await fetch(API_BASE_URL + "/health", { cache: "no-store" });
+      const response = await apiRequest("/health");
       if (!response.ok) throw new Error("Worker indisponível.");
       const health = await response.json();
       setWorkerHealth("online");
@@ -240,6 +247,16 @@ function App() {
       setWorkerAutomationEnabled(false);
       if (!silent) setToast("Não foi possível conectar ao worker. Confira a implantação e as variáveis de ambiente.");
     }
+  }
+
+  function saveAppAccessCode() {
+    const nextCode = appAccessCodeDraft.trim();
+    if (nextCode) localStorage.setItem(APP_ACCESS_CODE_STORAGE_KEY, nextCode);
+    else localStorage.removeItem(APP_ACCESS_CODE_STORAGE_KEY);
+    setAppAccessCode(nextCode);
+    setToast(nextCode ? "Código de acesso salvo neste navegador." : "Código de acesso removido.");
+    setWorkerHealth("checking");
+    window.setTimeout(() => { void checkWorkerHealth(true); }, 0);
   }
 
   async function runFutexDiagnostic() {
@@ -688,7 +705,7 @@ function App() {
             <section className="page-section">
               <div className="page-heading"><div><div className="eyebrow"><Settings2 size={13} /> PREFERÊNCIAS</div><h1>Configurações</h1><p>Gerencie as conexões e os parâmetros do aplicativo.</p></div></div>
               <div className="settings-layout">
-                <section className="panel settings-panel"><div className="settings-heading"><span className="settings-icon"><RadioTower size={19} /></span><div><h3>Integração de automação</h3><p>Conexão entre o aplicativo e o serviço que processa as solicitações.</p></div><span className={"config-value " + (automationReady ? "configured" : "pending")}>{workerHealth === "checking" ? "Verificando" : automationReady ? "Ativo" : workerHealth === "online" ? "Pausado" : "Offline"}</span></div><div className="settings-row"><div><strong>Proxy seguro da aplicação</strong><small>A chave do worker permanece no servidor Vercel.</small></div><span className="config-value configured">Configurado</span></div><div className="settings-row"><div><strong>Worker de automação</strong><small>Processador Playwright executado em servidor persistente.</small></div><span className={"config-value " + (workerHealth === "online" ? "configured" : "pending")}>{workerHealth === "checking" ? "Verificando" : workerHealth === "online" ? "Online" : "Offline"}</span></div><div className="settings-row"><div><strong>Automação FUTEX</strong><small>Ativada por variável segura no servidor.</small></div><span className={"config-value " + (automationReady ? "configured" : "pending")}>{workerAutomationEnabled ? "Ativa" : "Desativada"}</span></div><div className="settings-row"><div><strong>Site de referência</strong><small>Portal utilizado pelo fluxo de testes.</small></div><a className="external-link" href="https://futex.com.br/teste/" target="_blank" rel="noreferrer">Abrir FUTEX <ArrowUpRight size={13} /></a></div><div className="settings-callout"><LockKeyhole size={16} /><p>WORKER_API_TOKEN fica somente nas variáveis de ambiente da Vercel. API_TOKEN fica no servidor do worker. Nenhuma chave privada é armazenada no navegador.</p></div><button className="secondary-button" type="button" onClick={() => void checkWorkerHealth()}><RefreshCw size={14} /> Verificar conexão</button><button className="secondary-button" type="button" onClick={() => void runFutexDiagnostic()} disabled={diagnosingFutex || workerHealth !== "online"}>{diagnosingFutex ? <LoaderCircle className="spin" size={14} /> : <Activity size={14} />} {diagnosingFutex ? "Analisando site..." : "Diagnosticar FUTEX"}</button>{futexDiagnostic && <pre className="diagnostic-output">{futexDiagnostic}</pre>}</section>
+                <section className="panel settings-panel"><div className="settings-heading"><span className="settings-icon"><RadioTower size={19} /></span><div><h3>Integração de automação</h3><p>Conexão entre o aplicativo e o serviço que processa as solicitações.</p></div><span className={"config-value " + (automationReady ? "configured" : "pending")}>{workerHealth === "checking" ? "Verificando" : automationReady ? "Ativo" : workerHealth === "online" ? "Pausado" : "Offline"}</span></div><div className="settings-row"><div><strong>Proxy seguro da aplicação</strong><small>A chave do worker permanece no servidor Vercel.</small></div><span className="config-value configured">Configurado</span></div><div className="api-token-config"><label className="field"><span>Código de acesso do painel <small>APP_ACCESS_CODE</small></span><input type="password" value={appAccessCodeDraft} onChange={(event) => setAppAccessCodeDraft(event.target.value)} placeholder="Digite o código configurado na Vercel" autoComplete="current-password" /></label><button className="secondary-button" type="button" onClick={saveAppAccessCode}><Check size={14} /> Salvar código</button><p>Este código libera o uso do painel. O token interno do worker nunca é enviado ao navegador.</p></div><div className="settings-row"><div><strong>Worker de automação</strong><small>Processador Playwright executado em servidor persistente.</small></div><span className={"config-value " + (workerHealth === "online" ? "configured" : "pending")}>{workerHealth === "checking" ? "Verificando" : workerHealth === "online" ? "Online" : "Offline"}</span></div><div className="settings-row"><div><strong>Automação FUTEX</strong><small>Ativada por variável segura no servidor.</small></div><span className={"config-value " + (automationReady ? "configured" : "pending")}>{workerAutomationEnabled ? "Ativa" : "Desativada"}</span></div><div className="settings-row"><div><strong>Site de referência</strong><small>Portal utilizado pelo fluxo de testes.</small></div><a className="external-link" href="https://futex.com.br/teste/" target="_blank" rel="noreferrer">Abrir FUTEX <ArrowUpRight size={13} /></a></div><div className="settings-callout"><LockKeyhole size={16} /><p>WORKER_API_TOKEN fica somente nas variáveis de ambiente da Vercel. API_TOKEN fica no servidor do worker. Nenhuma chave privada é armazenada no navegador.</p></div><button className="secondary-button" type="button" onClick={() => void checkWorkerHealth()}><RefreshCw size={14} /> Verificar conexão</button><button className="secondary-button" type="button" onClick={() => void runFutexDiagnostic()} disabled={diagnosingFutex || workerHealth !== "online"}>{diagnosingFutex ? <LoaderCircle className="spin" size={14} /> : <Activity size={14} />} {diagnosingFutex ? "Analisando site..." : "Diagnosticar FUTEX"}</button>{futexDiagnostic && <pre className="diagnostic-output">{futexDiagnostic}</pre>}</section>
                 <section className="panel settings-panel"><div className="settings-heading"><span className="settings-icon"><Gauge size={19} /></span><div><h3>Ambiente do aplicativo</h3><p>Informações de execução desta versão.</p></div></div><div className="settings-row"><div><strong>Interface web</strong><small>Aplicação React responsiva.</small></div><span className="config-value configured">Operacional</span></div><div className="settings-row"><div><strong>Armazenamento local</strong><small>Rascunhos salvos neste navegador.</small></div><span className="config-value configured">Ativo</span></div><div className="settings-row"><div><strong>Sincronização entre dispositivos</strong><small>Histórico persistido no volume do servidor worker.</small></div><span className="config-value configured">Preparada</span></div></section>
               </div>
             </section>

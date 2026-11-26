@@ -150,9 +150,9 @@ async function waitForAppStep(scope, previousText) {
   if (result) return { ...result, session: undefined };
 
   try {
-    const text = await waitForText(scope, /conseguiu instalar/i, 45_000);
+    const text = await waitForText(scope, /conseguiu.{0,30}instalar|já instalou|instalou o (?:app|aplicativo)/i, 45_000);
     const app = extractRecommendedApp(text);
-    if (!/conseguiu instalar/i.test(text)) {
+    if (!/conseguiu.{0,30}instalar|já instalou|instalou o (?:app|aplicativo)/i.test(text)) {
       throw new Error("A FUTEX não apresentou a confirmação de instalação esperada.");
     }
     return {
@@ -285,7 +285,7 @@ export async function continueFutexSession(session, installed) {
   const scope = session.scope || session.page;
 
   if (installed) {
-    await clickChoiceAny(scope, ["Sim, consegui", "Sim, consegui instalar", "Sim"]);
+    await clickChoiceAny(scope, ["Sim, consegui", "Sim, consegui instalar", "Já instalei", "Sim"]);
     try {
       const text = await waitForText(scope, /seus dados de acesso|dados do teste|acesso liberado|seu teste.*ativo|teste gerado/i, 45_000);
       const result = extractResult(text) || extractResult(await visibleText(scope));
@@ -306,7 +306,7 @@ export async function continueFutexSession(session, installed) {
   }
 
   const previousText = await visibleText(scope);
-  await clickChoiceAny(scope, ["Não consegui", "Não consegui instalar", "Não"]);
+  await clickChoiceAny(scope, ["Não consegui", "Não consegui instalar", "Ainda não", "Não"]);
   const result = await waitForAppStep(scope, previousText);
   if (result.status === "completed") {
     await closeFutexSession(session);

@@ -380,9 +380,18 @@ export async function startFutexManualSession() {
 export async function readFutexConversation(session) {
   if (!session || session.closed) throw new Error("A sessão da FUTEX não está mais ativa.");
   const scope = session.scope || session.page;
-  const input = scope.locator('textarea[aria-label="Mensagem"], textarea').last();
-  return input.evaluate((node) => {
-    const root = node.getRootNode();
+  return scope.locator("body").evaluate(() => {
+    const findChatRoot = (root) => {
+      if (root.querySelector?.(".messages")) return root;
+      for (const host of Array.from(root.querySelectorAll("*"))) {
+        if (!host.shadowRoot) continue;
+        const found = findChatRoot(host.shadowRoot);
+        if (found) return found;
+      }
+      return undefined;
+    };
+    const root = findChatRoot(document) || document;
+    const input = root.querySelector('textarea[aria-label="Mensagem"], textarea');
     const messageNodes = Array.from(root.querySelectorAll(".messages .msg, .messages .system"));
     const messages = messageNodes.map((item, index) => {
       const className = String(item.getAttribute("class") || "");
@@ -400,29 +409,38 @@ export async function readFutexConversation(session) {
       .filter(Boolean)
       .filter((value, index, values) => values.indexOf(value) === index)
       .slice(-8);
-
+    const sendButton = root.querySelector('button[aria-label="Enviar mensagem"]');
     const transcript = messages.map((item) => item.text).join("\n");
     return {
       chatMessages: messages,
       chatOptions: options,
-      chatInputPlaceholder: node.getAttribute("placeholder") || "Digite sua resposta...",
-      chatCanSend: !root.querySelector('button[aria-label="Enviar mensagem"]')?.disabled,
+      chatInputPlaceholder: input?.getAttribute("placeholder") || "Digite sua resposta...",
+      chatCanSend: Boolean(input && sendButton && !sendButton.disabled),
       chatBotCount: root.querySelectorAll(".messages .msg.bot").length,
     };
   }).then((chat) => {
     const transcript = chat.chatMessages.map((item) => item.text).join("\n");
     const result = extractResult(transcript);
-    return result ? { ...chat, result } : chat;
+    const { result: _ignored, ...conversation } = chat;
+    return result ? { ...conversation, result } : conversation;
   });
 }
 
 async function waitForFutexBotReply(session, previousBotCount, timeout = 45_000) {
   const scope = session.scope || session.page;
-  const input = scope.locator('textarea[aria-label="Mensagem"], textarea').last();
-  await input.evaluate((node, previousCount) => new Promise((resolve, reject) => {
-    const root = node.getRootNode();
-    const container = root.querySelector(".messages");
-    if (!container) {
+  await scope.locator("body").evaluate((body, previousCount) => new Promise((resolve, reject) => {
+    const findChatRoot = (root) => {
+      if (root.querySelector?.(".messages")) return root;
+      for (const host of Array.from(root.querySelectorAll("*"))) {
+        if (!host.shadowRoot) continue;
+        const found = findChatRoot(host.shadowRoot);
+        if (found) return found;
+      }
+      return undefined;
+    };
+    const root = findChatRoot(document);
+    const container = root?.querySelector(".messages");
+    if (!root || !container) {
       reject(new Error("A conversa da FUTEX não está disponível."));
       return;
     }
@@ -442,8 +460,8 @@ async function waitForFutexBotReply(session, previousBotCount, timeout = 45_000)
     const timer = setTimeout(() => {
       observer.disconnect();
       reject(new Error("A FUTEX ainda não respondeu. Aguarde e atualize a conversa."));
-    }, 45_000);
-  }), previousBotCount, { timeout });
+    }, timeout);
+  }), previousBotCount, { timeout: timeout + 5_000 });
   await session.page.waitForTimeout(350);
 }
 

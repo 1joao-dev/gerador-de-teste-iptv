@@ -83,12 +83,13 @@ async function sendChatMessage(scope, message) {
 
 function extractRecommendedApp(text) {
   const patterns = [
-    /aplicativo indicado é o?\s*([^.!\n]+)/i,
-    /aplicativo recomendado é o?\s*([^.!\n]+)/i,
-    /instale o\s+([^.!\n]+?)\s+na sua tv/i,
+    /aplicativo indicado é o?\s*([^.!\n]+)/gi,
+    /aplicativo recomendado é o?\s*([^.!\n]+)/gi,
+    /instale o\s+([^.!\n]+?)\s+na sua tv/gi,
   ];
   for (const pattern of patterns) {
-    const match = text.match(pattern);
+    const matches = [...text.matchAll(pattern)];
+    const match = matches.at(-1);
     if (match?.[1]) return match[1].trim().replace(/[🎬📺📲]+$/u, "").trim();
   }
   return undefined;
@@ -147,7 +148,14 @@ function extractGuideUrl(scope) {
   }).catch(() => undefined);
 }
 
-async function waitForAppStep(scope) {
+async function waitForAppStep(scope, previousText) {
+  if (previousText) {
+    await scope.waitForFunction(
+      (previous) => (document.body?.innerText || "") !== previous,
+      previousText,
+      { timeout: 20_000 },
+    );
+  }
   const currentText = await visibleText(scope);
   const result = extractResult(currentText);
   if (result) return { ...result, session: undefined };
@@ -243,7 +251,7 @@ export async function continueFutexSession(session, installed) {
   if (installed) {
     await clickChoice(scope, "Sim, consegui");
     try {
-      const text = await waitForText(scope, /seus dados de acesso|seu teste já está ativo/i, 45_000);
+      const text = await waitForText(scope, /seus dados de acesso|dados do teste|acesso liberado|seu teste.*ativo|teste gerado/i, 45_000);
       const result = extractResult(text) || extractResult(await visibleText(scope));
       if (result) {
         await closeFutexSession(session);
@@ -261,8 +269,9 @@ export async function continueFutexSession(session, installed) {
     }
   }
 
+  const previousText = await visibleText(scope);
   await clickChoice(scope, "Não consegui");
-  const result = await waitForAppStep(scope);
+  const result = await waitForAppStep(scope, previousText);
   if (result.status === "completed") {
     await closeFutexSession(session);
     return result;

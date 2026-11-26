@@ -47,7 +47,7 @@ async function waitForText(scope, expression, timeout = 25_000) {
     expression.source,
     { timeout },
   );
-  return visibleText(page);
+  return visibleText(scope);
 }
 
 async function clickChoice(scope, label) {

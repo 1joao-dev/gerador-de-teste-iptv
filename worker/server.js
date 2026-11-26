@@ -42,8 +42,8 @@ app.use(cors({
 app.use(express.json({ limit: "12kb" }));
 app.use(rateLimit({
   windowMs: 60_000,
-  limit: 30,
-  standardHeaders: "draft-8",
+  max: 30,
+  standardHeaders: true,
   legacyHeaders: false,
 }));
 

@@ -45,8 +45,6 @@ type TestRequest = {
   contact: string;
   device: string;
   brand: string;
-  app: string;
-  notes?: string;
   status: RequestStatus;
   createdAt: string;
   username?: string;
@@ -66,8 +64,6 @@ const devices = [
   { label: "Computador", detail: "Windows, macOS ou Linux", icon: Command },
 ];
 
-const brands = ["Samsung", "LG", "TCL", "Philips", "Philco", "Sony", "AOC", "Roku", "Outra / Não sei"];
-const apps = ["IPTV Smarters Pro", "XCIPTV", "TiviMate", "Zuxo Player", "Outro / Não sei"];
 
 function formatDate(value: string) {
   return new Intl.DateTimeFormat("pt-BR", {
@@ -76,6 +72,14 @@ function formatDate(value: string) {
     hour: "2-digit",
     minute: "2-digit",
   }).format(new Date(value));
+}
+
+function formatPhone(value: string) {
+  const digits = value.replace(/\\D/g, "").slice(0, 11);
+  if (digits.length <= 2) return digits ? "(" + digits : "";
+  if (digits.length <= 6) return "(" + digits.slice(0, 2) + ") " + digits.slice(2);
+  if (digits.length <= 10) return "(" + digits.slice(0, 2) + ") " + digits.slice(2, 6) + "-" + digits.slice(6);
+  return "(" + digits.slice(0, 2) + ") " + digits.slice(2, 7) + "-" + digits.slice(7);
 }
 
 function makeId() {
@@ -116,8 +120,6 @@ function App() {
     contact: "",
     device: "Smart TV",
     brand: "Samsung",
-    app: "IPTV Smarters Pro",
-    notes: "",
   });
 
   useEffect(() => {
@@ -151,7 +153,7 @@ function App() {
     const term = searchTerm.trim().toLowerCase();
     if (!term) return requests;
     return requests.filter((item) =>
-      [item.customerName, item.device, item.brand, item.app, item.id]
+      [item.customerName, item.contact, item.device, item.brand, item.id]
         .join(" ")
         .toLowerCase()
         .includes(term),
@@ -170,8 +172,9 @@ function App() {
 
   async function submitRequest(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!form.device || !form.brand || !form.app) {
-      setToast("Preencha aparelho, marca e aplicativo para continuar.");
+    const phoneDigits = form.contact.replace(/\\D/g, "");
+    if (!form.customerName.trim() || phoneDigits.length < 10 || !form.device || !form.brand.trim()) {
+      setToast("Preencha nome, celular, tipo de dispositivo e marca.");
       return;
     }
 
@@ -181,8 +184,6 @@ function App() {
       contact: form.contact.trim(),
       device: form.device,
       brand: form.brand,
-      app: form.app,
-      notes: form.notes.trim(),
     };
 
     if (API_BASE_URL) {
@@ -209,7 +210,7 @@ function App() {
         };
         setRequests((current) => [request, ...current]);
         setToast("Solicitação enviada para a automação.");
-        setForm({ customerName: "", contact: "", device: "Smart TV", brand: "Samsung", app: "IPTV Smarters Pro", notes: "" });
+        setForm({ customerName: "", contact: "", device: "Smart TV", brand: "" });
         setPage("history");
       } catch (error) {
         setToast(error instanceof Error ? error.message : "Falha ao enviar a solicitação.");
@@ -229,7 +230,7 @@ function App() {
     setRequests((current) => [draft, ...current]);
     setSubmitting(false);
     setToast("Rascunho salvo neste navegador. Nenhum teste foi gerado.");
-    setForm({ customerName: "", contact: "", device: "Smart TV", brand: "Samsung", app: "IPTV Smarters Pro", notes: "" });
+    setForm({ customerName: "", contact: "", device: "Smart TV", brand: "" });
     setPage("history");
   }
 
@@ -383,7 +384,7 @@ function App() {
                     <div className="recent-list">
                       {requests.slice(0, 5).map((request) => <button className="recent-row" key={request.id} onClick={() => { setSelectedRequest(request); setPage("history"); }}>
                         <span className="recent-device">{request.device === "Smart TV" ? <Tv size={17} /> : <Monitor size={17} />}</span>
-                        <span className="recent-main"><strong>{request.customerName || request.device}</strong><small>{request.brand} · {request.app}</small></span>
+                        <span className="recent-main"><strong>{request.customerName || request.device}</strong><small>{request.device} · {request.brand}</small></span>
                         <span className="recent-date">{formatDate(request.createdAt)}</span>
                         <StatusPill status={request.status} />
                         <ChevronRight className="recent-chevron" size={15} />
@@ -412,18 +413,18 @@ function App() {
           {page === "new" && (
             <section className="page-section">
               <div className="page-heading">
-                <div><div className="eyebrow"><Zap size={13} /> NOVA SOLICITAÇÃO</div><h1>Novo teste</h1><p>Preencha os dados para preparar uma solicitação de teste.</p></div>
+                <div><div className="eyebrow"><Zap size={13} /> NOVA SOLICITAÇÃO</div><h1>Novo teste</h1><p>Informe os quatro dados solicitados para gerar o teste.</p></div>
                 <button className="back-button" onClick={() => navigate("overview")}>Voltar ao painel</button>
               </div>
               <div className="new-test-layout">
                 <form className="panel request-form" onSubmit={submitRequest}>
                   <div className="form-section-heading"><span className="step-number">01</span><div><h3>Dados do cliente</h3><p>Identificação para organizar a solicitação.</p></div></div>
                   <div className="form-grid two-columns">
-                    <label className="field"><span>Nome ou identificação <small>OPCIONAL</small></span><input value={form.customerName} onChange={(event) => updateForm("customerName", event.target.value)} placeholder="Ex.: Cliente 01" /></label>
-                    <label className="field"><span>Contato <small>OPCIONAL</small></span><input value={form.contact} onChange={(event) => updateForm("contact", event.target.value)} placeholder="Telefone ou e-mail" /></label>
+                    <label className="field"><span>Nome completo <small>OBRIGATÓRIO</small></span><input value={form.customerName} onChange={(event) => updateForm("customerName", event.target.value)} placeholder="Digite o nome do cliente" autoComplete="name" required /></label>
+                    <label className="field"><span>Celular com DDD <small>OBRIGATÓRIO</small></span><input type="tel" inputMode="tel" value={form.contact} onChange={(event) => updateForm("contact", formatPhone(event.target.value))} placeholder="(00) 00000-0000" autoComplete="tel" required /></label>
                   </div>
                   <div className="form-separator" />
-                  <div className="form-section-heading"><span className="step-number">02</span><div><h3>Dispositivo</h3><p>Onde o cliente pretende assistir?</p></div></div>
+                  <div className="form-section-heading"><span className="step-number">02</span><div><h3>Tipo de dispositivo</h3><p>Selecione o aparelho utilizado pelo cliente.</p></div></div>
                   <div className="device-grid">
                     {devices.map((device) => {
                       const Icon = device.icon;
@@ -433,17 +434,13 @@ function App() {
                     })}
                   </div>
                   <div className="form-separator" />
-                  <div className="form-section-heading"><span className="step-number">03</span><div><h3>Marca e aplicativo</h3><p>Selecione as opções compatíveis com o aparelho.</p></div></div>
-                  <div className="form-grid two-columns">
-                    <label className="field"><span>Marca do aparelho</span><div className="select-wrap"><select value={form.brand} onChange={(event) => updateForm("brand", event.target.value)}>{brands.map((brand) => <option key={brand}>{brand}</option>)}</select><ChevronDown size={16} /></div></label>
-                    <label className="field"><span>Aplicativo</span><div className="select-wrap"><select value={form.app} onChange={(event) => updateForm("app", event.target.value)}>{apps.map((app) => <option key={app}>{app}</option>)}</select><ChevronDown size={16} /></div></label>
-                  </div>
-                  <label className="field notes-field"><span>Observações <small>OPCIONAL</small></span><textarea value={form.notes} onChange={(event) => updateForm("notes", event.target.value)} placeholder="Adicione alguma informação importante..." rows={3} /></label>
+                  <div className="form-section-heading"><span className="step-number">03</span><div><h3>Marca do dispositivo</h3><p>Informe o fabricante ou a marca do aparelho.</p></div></div>
+                  <label className="field"><span>Marca <small>OBRIGATÓRIO</small></span><input value={form.brand} onChange={(event) => updateForm("brand", event.target.value)} placeholder="Ex.: Samsung, LG, Amazon..." required /></label>
                   <div className="form-actions"><span><LockKeyhole size={13} /> Seus dados são enviados somente ao backend configurado.</span><button className="primary-button" type="submit" disabled={submitting}>{submitting ? <LoaderCircle className="spin" size={16} /> : <Zap size={16} />}{submitting ? "Enviando..." : API_BASE_URL ? "Enviar solicitação" : "Salvar rascunho"}<ArrowRight size={15} /></button></div>
                 </form>
 
                 <aside className="new-test-aside">
-                  <div className="panel summary-card"><div className="summary-top"><span className="summary-icon"><Sparkles size={17} /></span><span>RESUMO</span></div><h3>Revise os dados</h3><p>Confira as informações antes de enviar sua solicitação.</p><div className="summary-items"><div><span>Dispositivo</span><strong>{form.device || "Não selecionado"}</strong></div><div><span>Marca</span><strong>{form.brand || "Não selecionada"}</strong></div><div><span>Aplicativo</span><strong>{form.app || "Não selecionado"}</strong></div></div><div className="summary-foot"><ShieldCheck size={15} /><span>O resultado só será exibido após confirmação do serviço de automação.</span></div></div>
+                  <div className="panel summary-card"><div className="summary-top"><span className="summary-icon"><Sparkles size={17} /></span><span>RESUMO</span></div><h3>Revise os dados</h3><p>Confira os dados antes de enviar a solicitação.</p><div className="summary-items"><div><span>Dispositivo</span><strong>{form.device || "Não selecionado"}</strong></div><div><span>Marca</span><strong>{form.brand || "Não selecionada"}</strong></div></div><div className="summary-foot"><ShieldCheck size={15} /><span>O resultado só será exibido após confirmação do serviço de automação.</span></div></div>
                   <div className="info-card"><div className="info-card-icon"><CircleHelp size={18} /></div><div><strong>Como funciona?</strong><p>Após conectar o worker autorizado, esta solicitação será enviada ao servidor, processada e acompanhada pelo histórico.</p></div></div>
                 </aside>
               </div>
@@ -459,12 +456,12 @@ function App() {
               <section className="panel history-panel">
                 <div className="history-toolbar"><div className="search-box"><Search size={17} /><input value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} placeholder="Buscar por cliente, aparelho ou marca..." /></div><button className="filter-button" onClick={refreshHistory}><RefreshCw size={15} /> Atualizar</button></div>
                 {filteredRequests.length === 0 ? <div className="empty-state history-empty"><div className="empty-icon"><Search size={22} /></div><strong>{requests.length ? "Nenhum resultado encontrado" : "Seu histórico está vazio"}</strong><p>{requests.length ? "Tente buscar por outro termo." : "As solicitações criadas aparecerão aqui."}</p>{!requests.length && <button className="secondary-button" onClick={() => navigate("new")}><Plus size={15} /> Criar solicitação</button>}</div> : (
-                  <div className="table-wrap"><table><thead><tr><th>CLIENTE / ID</th><th>DISPOSITIVO</th><th>APLICATIVO</th><th>DATA</th><th>STATUS</th><th /></tr></thead><tbody>
-                    {filteredRequests.map((request) => <tr key={request.id} onClick={() => setSelectedRequest(request)} className="clickable-row"><td><strong>{request.customerName || "Sem identificação"}</strong><small>{request.id.slice(0, 13)}</small></td><td>{request.brand} · {request.device}</td><td>{request.app}</td><td>{formatDate(request.createdAt)}</td><td><StatusPill status={request.status} /></td><td><button className="row-more" aria-label="Ver detalhes"><ChevronRight size={16} /></button></td></tr>)}
+                  <div className="table-wrap"><table><thead><tr><th>CLIENTE / ID</th><th>DISPOSITIVO</th><th>CELULAR</th><th>DATA</th><th>STATUS</th><th /></tr></thead><tbody>
+                    {filteredRequests.map((request) => <tr key={request.id} onClick={() => setSelectedRequest(request)} className="clickable-row"><td><strong>{request.customerName || "Sem identificação"}</strong><small>{request.id.slice(0, 13)}</small></td><td>{request.brand} · {request.device}</td><td>{request.contact}</td><td>{formatDate(request.createdAt)}</td><td><StatusPill status={request.status} /></td><td><button className="row-more" aria-label="Ver detalhes"><ChevronRight size={16} /></button></td></tr>)}
                   </tbody></table></div>
                 )}
               </section>
-              {selectedRequest && <section className="panel detail-panel"><div className="panel-heading"><div><h3>Detalhes da solicitação</h3><p>{selectedRequest.id}</p></div><button className="icon-button" onClick={() => setSelectedRequest(null)} aria-label="Fechar detalhes"><X size={17} /></button></div><div className="detail-grid"><div><span>Cliente</span><strong>{selectedRequest.customerName || "Não informado"}</strong></div><div><span>Contato</span><strong>{selectedRequest.contact || "Não informado"}</strong></div><div><span>Dispositivo</span><strong>{selectedRequest.device}</strong></div><div><span>Marca</span><strong>{selectedRequest.brand}</strong></div><div><span>Aplicativo</span><strong>{selectedRequest.app}</strong></div><div><span>Status</span><StatusPill status={selectedRequest.status} /></div></div>{selectedRequest.message && <p className="detail-message">{selectedRequest.message}</p>}{(selectedRequest.username || selectedRequest.password || selectedRequest.code) && <div className="result-box"><div><strong>Dados retornados pelo serviço</strong><button className="text-button" onClick={() => void copyResult(selectedRequest)}><Copy size={14} /> Copiar</button></div>{selectedRequest.code && <p>Código: <b>{selectedRequest.code}</b></p>}{selectedRequest.username && <p>Usuário: <b>{selectedRequest.username}</b></p>}{selectedRequest.password && <p>Senha: <b>{selectedRequest.password}</b></p>}{selectedRequest.duration && <p>Duração: <b>{selectedRequest.duration}</b></p>}</div>}</section>}
+              {selectedRequest && <section className="panel detail-panel"><div className="panel-heading"><div><h3>Detalhes da solicitação</h3><p>{selectedRequest.id}</p></div><button className="icon-button" onClick={() => setSelectedRequest(null)} aria-label="Fechar detalhes"><X size={17} /></button></div><div className="detail-grid"><div><span>Cliente</span><strong>{selectedRequest.customerName || "Não informado"}</strong></div><div><span>Contato</span><strong>{selectedRequest.contact || "Não informado"}</strong></div><div><span>Dispositivo</span><strong>{selectedRequest.device}</strong></div><div><span>Marca</span><strong>{selectedRequest.brand}</strong></div><div><span>Status</span><StatusPill status={selectedRequest.status} /></div></div>{selectedRequest.message && <p className="detail-message">{selectedRequest.message}</p>}{(selectedRequest.username || selectedRequest.password || selectedRequest.code) && <div className="result-box"><div><strong>Dados retornados pelo serviço</strong><button className="text-button" onClick={() => void copyResult(selectedRequest)}><Copy size={14} /> Copiar</button></div>{selectedRequest.code && <p>Código: <b>{selectedRequest.code}</b></p>}{selectedRequest.username && <p>Usuário: <b>{selectedRequest.username}</b></p>}{selectedRequest.password && <p>Senha: <b>{selectedRequest.password}</b></p>}{selectedRequest.duration && <p>Duração: <b>{selectedRequest.duration}</b></p>}</div>}</section>}
             </section>
           )}
 

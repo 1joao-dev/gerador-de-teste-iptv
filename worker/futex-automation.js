@@ -83,6 +83,38 @@ async function clickChoiceAny(scope, labels) {
   throw lastError || new Error("Nenhuma das opções esperadas apareceu na FUTEX.");
 }
 
+async function clickChoiceAnyFrame(page, labels) {
+  let lastError;
+  for (const frame of page.frames()) {
+    try {
+      return await clickChoiceAny(frame, labels);
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError || new Error("Nenhuma opção inicial apareceu na página FUTEX.");
+}
+
+function deviceChoiceLabels(device) {
+  const aliases = {
+    "Smart TV": ["Smart TV", "TV Smart", "Televisão Smart"],
+    "Android TV": ["Android TV", "TV Android"],
+    "Roku TV": ["Roku TV", "Roku"],
+    "TV Box": ["TV Box", "TVBox", "Box TV"],
+    "Celular Android": ["Celular Android", "Android", "Smartphone Android"],
+    "iPhone / iPad": ["iPhone / iPad", "iPhone/iPad", "iPhone", "iPad"],
+    "Computador": ["Computador", "PC", "Notebook"],
+    "Fire Stick": ["Fire Stick", "Fire TV Stick", "Amazon Fire TV"],
+    "Xbox": ["Xbox"],
+    "XCIPTV": ["XCIPTV"],
+    "IPTV Smarters": ["IPTV Smarters", "Smarters"],
+    "Lista M3U": ["Lista M3U", "M3U"],
+    "SS IPTV": ["SS IPTV"],
+    "Duplecast": ["Duplecast"],
+  };
+  return aliases[device] || [device];
+}
+
 function escapeRegExp(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
@@ -208,7 +240,7 @@ export async function startFutexSession(payload) {
       const startOptions = ["Fazer teste grátis", "Teste grátis", "Iniciar atendimento", "Atendimento"];
       for (const option of startOptions) {
         try {
-          await clickChoice(page, option);
+          await clickChoiceAnyFrame(page, [option]);
           break;
         } catch {
           // Tenta a próxima opção visível; não contorna desafios ou bloqueios do site.
@@ -224,7 +256,7 @@ export async function startFutexSession(payload) {
     await sendChatMessage(scope, payload.contact.replace(/\D/g, ""));
 
     await waitForText(scope, /onde.*assistir|qual.*dispositivo|em qual.*assistir|selecione.*dispositivo/i, 25_000);
-    await clickChoice(scope, payload.device);
+    await clickChoiceAny(scope, deviceChoiceLabels(payload.device));
 
     await waitForText(scope, /marca|qual.*aparelho/i, 25_000);
     const knownBrands = ["Samsung", "LG", "TCL", "Sony", "Philips", "Panasonic", "Philco", "AOC", "Roku"];

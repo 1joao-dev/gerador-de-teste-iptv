@@ -13,6 +13,10 @@ import {
   closeFutexSession,
   continueFutexSession,
   startFutexSession,
+  startFutexManualSession,
+  readFutexConversation,
+  sendFutexChatMessage,
+  clickFutexChatOption,
   inspectFutexPage,
 } from "./futex-automation.js";
 
@@ -211,18 +215,19 @@ app.post("/api/test-requests", async (req, res) => {
     });
   }
 
+  const manualChat = req.body?.manualChat === true;
   const { customerName, contact, device, brand } = req.body || {};
   const phoneDigits = String(contact || "").replace(/\D/g, "");
-  if (
+  if (!manualChat && (
     typeof customerName !== "string" || customerName.trim().length < 2 ||
     phoneDigits.length < 10 || phoneDigits.length > 13 ||
     typeof device !== "string" || device.trim().length < 2 ||
     typeof brand !== "string" || brand.trim().length < 1
-  ) {
+  )) {
     return res.status(400).json({ message: "Informe nome, WhatsApp, dispositivo e marca válidos." });
   }
 
-  if (req.body?.autoConfirmInstall !== undefined && typeof req.body.autoConfirmInstall !== "boolean") {
+  if (!manualChat && req.body?.autoConfirmInstall !== undefined && typeof req.body.autoConfirmInstall !== "boolean") {
     return res.status(400).json({ message: "A opção de confirmação automática é inválida." });
   }
 
@@ -240,11 +245,12 @@ app.post("/api/test-requests", async (req, res) => {
   const id = crypto.randomUUID();
   const job = {
     id,
-    customerName: customerName.trim().slice(0, 100),
-    contact: String(contact).trim().slice(0, 30),
-    device: device.trim().slice(0, 60),
-    brand: brand.trim().slice(0, 60),
-    autoConfirmInstall: req.body?.autoConfirmInstall === true,
+    customerName: manualChat ? "Atendimento FUTEX" : customerName.trim().slice(0, 100),
+    contact: manualChat ? "" : String(contact).trim().slice(0, 30),
+    device: manualChat ? "A definir no atendimento" : device.trim().slice(0, 60),
+    brand: manualChat ? "A definir no atendimento" : brand.trim().slice(0, 60),
+    manualChat,
+    autoConfirmInstall: !manualChat && req.body?.autoConfirmInstall === true,
     status: "queued",
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
@@ -257,7 +263,9 @@ app.post("/api/test-requests", async (req, res) => {
   void (async () => {
     updateJob(id, { status: "running", message: "Iniciando o atendimento automaticamente." });
     try {
-      const { session, result } = await startFutexSession(job);
+      const { session, result } = manualChat
+        ? await startFutexManualSession()
+        : await startFutexSession(job);
       if (session) {
         session.startedAt = Date.now();
         sessions.set(id, session);
@@ -276,11 +284,74 @@ app.post("/api/test-requests", async (req, res) => {
   })();
 });
 
-app.get("/api/test-requests/:id", (req, res) => {
+app.get("/api/test-requests/:id", async (req, res) => {
+  let job = jobs.get(req.params.id);
+  if (!job) return res.status(404).json({ message: "Solicitação não encontrada." });
+
+  const session = sessions.get(req.params.id);
+  if (session && job.manualChat && !busySessions.has(req.params.id) && job.status !== "completed") {
+    try {
+      const chat = await readFutexConversation(session);
+      const { result: parsedResult, ...conversation } = chat;
+      job = updateJob(req.params.id, parsedResult
+        ? { ...parsedResult, manualChat: true, ...conversation }
+        : { ...conversation, manualChat: true }) || job;
+      if (parsedResult?.status === "completed") closeSessionForJob(req.params.id, session);
+    } catch {
+      // Mantém a última conversa conhecida se o widget estiver atualizando.
+    }
+  }
+
+  res.setHeader("Cache-Control", "no-store");
+  return res.json(safeJob(jobs.get(req.params.id) || job));
+});
+
+app.post("/api/test-requests/:id/chat", (req, res) => {
   const job = jobs.get(req.params.id);
   if (!job) return res.status(404).json({ message: "Solicitação não encontrada." });
-  res.setHeader("Cache-Control", "no-store");
-  return res.json(safeJob(job));
+  if (!job.manualChat) return res.status(409).json({ message: "Esta solicitação não usa o atendimento manual." });
+  const session = sessions.get(req.params.id);
+  if (!session) return res.status(409).json({ message: "A sessão da FUTEX não está mais ativa. Inicie um novo atendimento." });
+  if (busySessions.has(req.params.id)) {
+    return res.status(409).json({ message: "A resposta anterior ainda está sendo processada." });
+  }
+
+  const message = typeof req.body?.message === "string" ? req.body.message.trim() : "";
+  const option = typeof req.body?.option === "string" ? req.body.option.trim() : "";
+  if (Boolean(message) === Boolean(option)) {
+    return res.status(400).json({ message: "Digite uma resposta ou selecione uma opção da FUTEX." });
+  }
+  if (message.length > 1_000 || option.length > 200) {
+    return res.status(400).json({ message: "A resposta excede o limite permitido." });
+  }
+
+  busySessions.add(req.params.id);
+  session.startedAt = Date.now();
+  const accepted = updateJob(req.params.id, {
+    status: "running",
+    message: "Enviando sua resposta para o atendimento FUTEX.",
+  });
+  res.status(202).json(safeJob(accepted));
+
+  void (async () => {
+    try {
+      const result = message
+        ? await sendFutexChatMessage(session, message)
+        : await clickFutexChatOption(session, option);
+      updateJob(req.params.id, { ...result, manualChat: true });
+      if (result.status === "completed" || result.status === "needs_human") {
+        closeSessionForJob(req.params.id, session);
+      }
+    } catch (error) {
+      updateJob(req.params.id, {
+        status: "running",
+        manualChat: true,
+        message: error instanceof Error ? error.message : "Não foi possível enviar a resposta à FUTEX.",
+      });
+    } finally {
+      busySessions.delete(req.params.id);
+    }
+  })();
 });
 
 app.post("/api/test-requests/:id/app-confirmation", (req, res) => {

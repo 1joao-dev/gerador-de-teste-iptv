@@ -27,7 +27,24 @@ async function getBrowser() {
 }
 
 async function visibleText(scope) {
-  return scope.locator("body").innerText({ timeout: 5_000 }).catch(() => "");
+  return scope.evaluate(() => {
+    const parts = [document.body?.innerText || ""];
+    const visit = (root) => {
+      for (const host of Array.from(root.querySelectorAll("*"))) {
+        if (!host.shadowRoot) continue;
+        const messages = host.shadowRoot.querySelectorAll(
+          ".messages .msg, .messages .system, .messages .options .chip, .messages .cta",
+        );
+        for (const message of messages) {
+          const text = (message.innerText || message.textContent || "").trim();
+          if (text) parts.push(text);
+        }
+        visit(host.shadowRoot);
+      }
+    };
+    visit(document);
+    return [...new Set(parts.map((part) => part.trim()).filter(Boolean))].join("\\n");
+  }).catch(() => scope.locator("body").innerText({ timeout: 5_000 }).catch(() => ""));
 }
 
 async function findChatScope(page) {
@@ -44,8 +61,22 @@ async function findChatScope(page) {
 async function waitForText(scope, expression, timeout = 25_000) {
   await scope.waitForFunction(
     (source) => {
-      const text = document.body?.innerText || "";
-      return new RegExp(source, "i").test(text);
+      const parts = [document.body?.innerText || ""];
+      const visit = (root) => {
+        for (const host of Array.from(root.querySelectorAll("*"))) {
+          if (!host.shadowRoot) continue;
+          const messages = host.shadowRoot.querySelectorAll(
+            ".messages .msg, .messages .system, .messages .options .chip, .messages .cta",
+          );
+          for (const message of messages) {
+            const text = (message.innerText || message.textContent || "").trim();
+            if (text) parts.push(text);
+          }
+          visit(host.shadowRoot);
+        }
+      };
+      visit(document);
+      return new RegExp(source, "i").test(parts.join("\\n"));
     },
     expression.source,
     { timeout },
@@ -222,7 +253,16 @@ export async function inspectFutexPage() {
                 id: root.host.id || undefined,
               } : undefined,
               rootText: node.tagName === "TEXTAREA" ? (root.textContent || "").trim().slice(0, 8_000) : undefined,
-              rootHtml: node.tagName === "TEXTAREA" && isShadowRoot ? root.innerHTML.slice(0, 16_000) : undefined,
+              chatMessages: node.tagName === "TEXTAREA" && isShadowRoot
+                ? Array.from(root.querySelectorAll(".messages .msg, .messages .system, .messages .options .chip, .messages .cta"))
+                    .map((message) => (message.innerText || message.textContent || "").trim())
+                    .filter(Boolean)
+                    .slice(0, 40)
+                : undefined,
+              messageContainerText: node.tagName === "TEXTAREA" && isShadowRoot
+                ? (root.querySelector(".messages")?.innerText || "").trim().slice(0, 8_000)
+                : undefined,
+              rootHtml: node.tagName === "TEXTAREA" && isShadowRoot ? root.innerHTML.slice(-12_000) : undefined,
             };
           })),
         frame.locator("body").evaluate((body) => {

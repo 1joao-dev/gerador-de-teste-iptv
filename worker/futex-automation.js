@@ -198,7 +198,7 @@ export async function inspectFutexPage() {
     }
 
     const frames = await Promise.all(page.frames().slice(0, 8).map(async (frame) => {
-      const [text, controls] = await Promise.all([
+      const [text, controls, dom] = await Promise.all([
         visibleText(frame),
         frame.locator("input, textarea, select, button, [role='button'], [contenteditable='true']")
           .evaluateAll((nodes) => nodes.filter((node) => {
@@ -213,12 +213,45 @@ export async function inspectFutexPage() {
             ariaLabel: node.getAttribute("aria-label"),
             text: (node.innerText || node.textContent || "").trim().slice(0, 100),
           }))),
+        frame.locator("body").evaluate((body) => {
+          const candidates = [];
+          const visit = (root, depth = 0) => {
+            if (depth > 3) return;
+            for (const node of Array.from(root.querySelectorAll("*"))) {
+              const rect = node.getBoundingClientRect();
+              const style = window.getComputedStyle(node);
+              const visible = rect.width > 0 && rect.height > 0 && style.visibility !== "hidden" && style.display !== "none";
+              const text = (node.innerText || node.textContent || "").trim();
+              const before = window.getComputedStyle(node, "::before").content;
+              const after = window.getComputedStyle(node, "::after").content;
+              if (visible && (text || (before && before !== "none" && before !== "normal") || (after && after !== "none" && after !== "normal"))) {
+                candidates.push({
+                  tag: node.tagName.toLowerCase(),
+                  className: node.getAttribute("class"),
+                  role: node.getAttribute("role"),
+                  ariaLabel: node.getAttribute("aria-label"),
+                  text: text.slice(0, 350),
+                  before: before && before !== "none" ? before.slice(0, 120) : undefined,
+                  after: after && after !== "none" ? after.slice(0, 120) : undefined,
+                });
+              }
+              if (node.shadowRoot) visit(node.shadowRoot, depth + 1);
+              if (candidates.length >= 80) return;
+            }
+          };
+          visit(body);
+          return {
+            bodyTextContent: (body.textContent || "").trim().slice(0, 8_000),
+            candidates: candidates.slice(0, 80),
+          };
+        }).catch(() => ({ bodyTextContent: "", candidates: [] })),
       ]);
       return {
         name: frame.name(),
         url: frame.url(),
         visibleText: text.slice(0, 2_000),
         controls,
+        dom,
       };
     }));
 

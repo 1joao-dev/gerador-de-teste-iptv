@@ -58,6 +58,20 @@ type AdminProfile = {
 };
 
 const PROFILE_STORAGE_KEY = "iptvflow.admin-profile.v1";
+
+function getPasswordPolicy(password: string) {
+  const checks = {
+    length: Array.from(password).length >= 8,
+    uppercase: /\p{Lu}/u.test(password),
+    number: /\p{N}/u.test(password),
+    symbol: /[^\p{L}\p{N}\s]/u.test(password),
+    lowercase: /\p{Ll}/u.test(password),
+    long: Array.from(password).length >= 12,
+  };
+  const valid = checks.length && checks.uppercase && checks.number && checks.symbol;
+  const strength = !password ? "empty" : !valid ? "weak" : checks.long && checks.lowercase ? "strong" : "medium";
+  return { valid, strength, checks };
+}
 const DEFAULT_ADMIN_PROFILE: AdminProfile = {
   displayName: "João | Dev",
   title: "Proprietário",
@@ -135,10 +149,18 @@ function getProfileInitials(name: string) {
   return parts.slice(0, 2).map((part) => Array.from(part)[0]?.toUpperCase() || "").join("") || "JD";
 }
 
-function readAdminProfile(): AdminProfile {
+function readAdminProfile(username = "1joaodev", role: "admin" | "user" = "admin"): AdminProfile {
   try {
-    const raw = window.localStorage.getItem(PROFILE_STORAGE_KEY);
-    if (!raw) return DEFAULT_ADMIN_PROFILE;
+    const storageKey = username.toLowerCase() === "1joaodev" ? PROFILE_STORAGE_KEY : PROFILE_STORAGE_KEY + "." + username.toLowerCase();
+    const raw = window.localStorage.getItem(storageKey);
+    if (!raw) {
+      return {
+        ...DEFAULT_ADMIN_PROFILE,
+        displayName: username.toLowerCase() === "1joaodev" ? DEFAULT_ADMIN_PROFILE.displayName : username,
+        title: role === "admin" ? (username.toLowerCase() === "1joaodev" ? "Proprietário" : "Administrador") : "Usuário",
+        bio: role === "admin" ? DEFAULT_ADMIN_PROFILE.bio : "",
+      };
+    }
     const saved = JSON.parse(raw) as Partial<AdminProfile>;
     const accent = PROFILE_ACCENTS.some((item) => item.value === saved.accent)
       ? saved.accent as string
@@ -239,10 +261,16 @@ function App() {
   const [requests, setRequests] = useState<TestRequest[]>([]);
   const [authState, setAuthState] = useState<"checking" | "authenticated" | "unauthenticated">("checking");
   const [adminUsername, setAdminUsername] = useState("1joaodev");
+  const [userRole, setUserRole] = useState<"admin" | "user">("admin");
+  const [authMode, setAuthMode] = useState<"login" | "register">("login");
   const [loginUsername, setLoginUsername] = useState("1joaodev");
   const [profile, setProfile] = useState<AdminProfile>(() => readAdminProfile());
   const [profileDraft, setProfileDraft] = useState<AdminProfile>(() => readAdminProfile());
   const [loginPassword, setLoginPassword] = useState("");
+  const [registerUsername, setRegisterUsername] = useState("");
+  const [registerLicenseKey, setRegisterLicenseKey] = useState("");
+  const [registerPassword, setRegisterPassword] = useState("");
+  const [registerPasswordConfirm, setRegisterPasswordConfirm] = useState("");
   const [loginError, setLoginError] = useState("");
   const [loginSubmitting, setLoginSubmitting] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
@@ -269,7 +297,13 @@ function App() {
       })
       .then((data) => {
         if (cancelled) return;
-        setAdminUsername(data.user?.username || "admin");
+        const username = data.user?.username || "admin";
+        const role = data.user?.role === "admin" ? "admin" : "user";
+        setAdminUsername(username);
+        setUserRole(role);
+        const savedProfile = readAdminProfile(username, role);
+        setProfile(savedProfile);
+        setProfileDraft(savedProfile);
         setAuthState("authenticated");
       })
       .catch(() => {
@@ -353,11 +387,67 @@ function App() {
       });
       const result = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(result.message || "Não foi possível autenticar.");
-      setAdminUsername(result.user?.username || loginUsername.trim() || "admin");
+      const username = result.user?.username || loginUsername.trim() || "admin";
+      const role = result.user?.role === "admin" ? "admin" : "user";
+      setAdminUsername(username);
+      setUserRole(role);
+      const savedProfile = readAdminProfile(username, role);
+      setProfile(savedProfile);
+      setProfileDraft(savedProfile);
       setLoginPassword("");
       setAuthState("authenticated");
     } catch (error) {
       setLoginError(error instanceof Error ? error.message : "Falha ao entrar. Tente novamente.");
+    } finally {
+      setLoginSubmitting(false);
+    }
+  }
+
+  async function handleRegister(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (loginSubmitting) return;
+    const policy = getPasswordPolicy(registerPassword);
+    if (!policy.valid) {
+      setLoginError("A senha precisa ter no mínimo 8 caracteres, uma letra maiúscula, um número e um símbolo.");
+      return;
+    }
+    if (registerPassword !== registerPasswordConfirm) {
+      setLoginError("As senhas não coincidem.");
+      return;
+    }
+    if (!registerLicenseKey.trim()) {
+      setLoginError("Informe sua chave de ativação KeyAuth.");
+      return;
+    }
+    setLoginSubmitting(true);
+    setLoginError("");
+    try {
+      const response = await fetch("/api/auth/register", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          username: registerUsername.trim(),
+          password: registerPassword,
+          licenseKey: registerLicenseKey.trim(),
+        }),
+        cache: "no-store",
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.message || "Não foi possível criar a conta.");
+      const username = result.user?.username || registerUsername.trim().toLowerCase();
+      const role = result.user?.role === "admin" ? "admin" : "user";
+      setAdminUsername(username);
+      setUserRole(role);
+      const savedProfile = readAdminProfile(username, role);
+      setProfile(savedProfile);
+      setProfileDraft(savedProfile);
+      setRegisterPassword("");
+      setRegisterPasswordConfirm("");
+      setRegisterLicenseKey("");
+      setAuthState("authenticated");
+    } catch (error) {
+      setLoginError(error instanceof Error ? error.message : "Falha ao criar conta. Tente novamente.");
     } finally {
       setLoginSubmitting(false);
     }
@@ -376,7 +466,12 @@ function App() {
       setSelectedRequest(null);
       setFlowRequest(null);
       setLoginPassword("");
+      setRegisterPassword("");
+      setRegisterPasswordConfirm("");
+      setRegisterLicenseKey("");
       setLoginError("");
+      setAuthMode("login");
+      setUserRole("admin");
       setAuthState("unauthenticated");
     }
   }
@@ -432,7 +527,8 @@ function App() {
       return;
     }
     try {
-      window.localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(nextProfile));
+      const storageKey = adminUsername.toLowerCase() === "1joaodev" ? PROFILE_STORAGE_KEY : PROFILE_STORAGE_KEY + "." + adminUsername.toLowerCase();
+      window.localStorage.setItem(storageKey, JSON.stringify(nextProfile));
       setProfile(nextProfile);
       setProfileDraft(nextProfile);
       setToast("Perfil atualizado com sucesso.");
@@ -443,9 +539,11 @@ function App() {
 
   function resetProfile() {
     try {
-      window.localStorage.removeItem(PROFILE_STORAGE_KEY);
-      setProfile(DEFAULT_ADMIN_PROFILE);
-      setProfileDraft(DEFAULT_ADMIN_PROFILE);
+      const storageKey = adminUsername.toLowerCase() === "1joaodev" ? PROFILE_STORAGE_KEY : PROFILE_STORAGE_KEY + "." + adminUsername.toLowerCase();
+      window.localStorage.removeItem(storageKey);
+      const restoredProfile = readAdminProfile(adminUsername, userRole);
+      setProfile(restoredProfile);
+      setProfileDraft(restoredProfile);
       setToast("Perfil restaurado para o padrão.");
     } catch {
       setToast("Não foi possível restaurar o perfil neste navegador.");
@@ -681,6 +779,7 @@ function App() {
     { id: "history" as const, label: "Histórico", icon: History },
     { id: "settings" as const, label: "Configurações", icon: Settings2 },
   ];
+  const registerPasswordPolicy = getPasswordPolicy(registerPassword);
 
   if (authState === "checking") {
     return (
@@ -708,12 +807,12 @@ function App() {
               <span className="auth-brand-status"><i /> SISTEMA ONLINE</span>
             </div>
             <div className="auth-intro-copy">
-              <div className="auth-eyebrow"><ShieldCheck size={14} /> CENTRAL ADMINISTRATIVA</div>
-              <h1>Seu controle.<br /><em>Seu acesso.</em></h1>
-              <p>Um ambiente reservado para administrar a operação do IPTV Flow com autenticação protegida e acesso controlado.</p>
+              <div className="auth-eyebrow"><ShieldCheck size={14} /> CENTRAL DE ACESSO</div>
+              <h1>Seu acesso.<br /><em>Seu IPTV Flow.</em></h1>
+              <p>Entre com sua conta ou ative seu acesso usando uma licença KeyAuth. Cada perfil recebe permissões próprias.</p>
             </div>
             <div className="auth-feature-list">
-              <div><span><LockKeyhole size={16} /></span><div><strong>Acesso restrito</strong><small>Somente credenciais administrativas autorizadas.</small></div></div>
+              <div><span><LockKeyhole size={16} /></span><div><strong>Acesso controlado</strong><small>Conta ativada por uma licença KeyAuth válida.</small></div></div>
               <div><span><ShieldCheck size={16} /></span><div><strong>Sessão protegida</strong><small>Cookie seguro, sem senha salva no dispositivo.</small></div></div>
               <div><span><Activity size={16} /></span><div><strong>Operação isolada</strong><small>As chaves internas permanecem no servidor.</small></div></div>
             </div>
@@ -721,50 +820,79 @@ function App() {
           </section>
 
           <section className="auth-card-wrap">
-            <form className="auth-card" onSubmit={handleLogin}>
-              <div className="auth-card-heading">
-                <div className="auth-card-icon"><LockKeyhole size={20} /></div>
-                <span className="auth-card-label">LOGIN SEGURO</span>
-              </div>
-              <h2>Acesso administrativo</h2>
-              <p className="auth-card-description">Entre com suas credenciais para continuar.</p>
-
-              <label className="auth-field">
-                <span>Usuário</span>
-                <input
-                  type="text"
-                  value={loginUsername}
-                  onChange={(event) => setLoginUsername(event.target.value)}
-                  placeholder="admin"
-                  autoComplete="username"
-                  autoCapitalize="none"
-                  spellCheck={false}
-                  maxLength={64}
-                  required
-                />
-              </label>
-              <label className="auth-field">
-                <span>Senha de acesso</span>
-                <input
-                  type="password"
-                  value={loginPassword}
-                  onChange={(event) => setLoginPassword(event.target.value)}
-                  placeholder="Digite sua senha administrativa"
-                  autoComplete="current-password"
-                  maxLength={256}
-                  required
-                />
-              </label>
-
-              {loginError && <div className="auth-error" role="alert"><X size={15} /> {loginError}</div>}
-
-              <button className="auth-submit" type="submit" disabled={loginSubmitting || !loginUsername.trim() || !loginPassword}>
-                {loginSubmitting ? <LoaderCircle className="spin" size={17} /> : <span>Entrar no painel <ArrowRight size={16} /></span>}
-              </button>
-
-              <div className="auth-security-note"><ShieldCheck size={15} /><span>Conexão protegida. A sessão expira automaticamente.</span></div>
-            </form>
-            <div className="auth-card-bottom"><LockKeyhole size={12} /> ÁREA EXCLUSIVA PARA ADMINISTRADORES</div>
+            {authMode === "login" ? (
+              <form className="auth-card" onSubmit={handleLogin}>
+                <div className="auth-card-heading">
+                  <div className="auth-card-icon"><LockKeyhole size={20} /></div>
+                  <span className="auth-card-label">LOGIN SEGURO</span>
+                </div>
+                <h2>Entrar no IPTV Flow</h2>
+                <p className="auth-card-description">Acesse sua conta. Administradores e usuários têm permissões diferentes.</p>
+                <label className="auth-field">
+                  <span>Usuário</span>
+                  <input type="text" value={loginUsername} onChange={(event) => setLoginUsername(event.target.value)} placeholder="Seu nome de usuário" autoComplete="username" autoCapitalize="none" spellCheck={false} maxLength={64} required />
+                </label>
+                <label className="auth-field">
+                  <span>Senha de acesso</span>
+                  <input type="password" value={loginPassword} onChange={(event) => setLoginPassword(event.target.value)} placeholder="Digite sua senha" autoComplete="current-password" maxLength={256} required />
+                </label>
+                {loginError && <div className="auth-error" role="alert"><X size={15} /> {loginError}</div>}
+                <button className="auth-submit" type="submit" disabled={loginSubmitting || !loginUsername.trim() || !loginPassword}>
+                  {loginSubmitting ? <LoaderCircle className="spin" size={17} /> : <span>Entrar <ArrowRight size={16} /></span>}
+                </button>
+                <button className="auth-mode-switch" type="button" onClick={() => { setAuthMode("register"); setLoginError(""); }}>
+                  Não tem uma conta? <strong>Criar conta com KeyAuth</strong>
+                </button>
+                <div className="auth-security-note"><ShieldCheck size={15} /><span>Conexão protegida. A sessão expira automaticamente.</span></div>
+              </form>
+            ) : (
+              <form className="auth-card" onSubmit={handleRegister}>
+                <div className="auth-card-heading">
+                  <div className="auth-card-icon"><UserRound size={20} /></div>
+                  <span className="auth-card-label">ATIVAÇÃO KEYAUTH</span>
+                </div>
+                <h2>Criar minha conta</h2>
+                <p className="auth-card-description">Ative seu acesso com uma licença KeyAuth. Contas criadas por aqui recebem nível de usuário comum.</p>
+                <label className="auth-field">
+                  <span>Nome de usuário</span>
+                  <input type="text" value={registerUsername} onChange={(event) => setRegisterUsername(event.target.value.toLowerCase().replace(/[^a-z0-9_.-]/g, ""))} placeholder="Escolha seu usuário" autoComplete="username" autoCapitalize="none" spellCheck={false} minLength={3} maxLength={32} pattern="[a-z0-9_.-]{3,32}" required />
+                </label>
+                <label className="auth-field">
+                  <span>Chave de ativação KeyAuth</span>
+                  <input type="text" value={registerLicenseKey} onChange={(event) => setRegisterLicenseKey(event.target.value)} placeholder="Cole sua licença" autoComplete="off" autoCapitalize="characters" spellCheck={false} maxLength={160} required />
+                </label>
+                <label className="auth-field">
+                  <span>Crie sua senha</span>
+                  <input type="password" value={registerPassword} onChange={(event) => setRegisterPassword(event.target.value)} placeholder="Mínimo de 8 caracteres" autoComplete="new-password" maxLength={128} required />
+                </label>
+                {registerPassword && (
+                  <div className={"password-strength strength-" + registerPasswordPolicy.strength} aria-live="polite">
+                    <div className="password-strength-top"><span>Força da senha</span><strong>{registerPasswordPolicy.strength === "weak" ? "Fraca" : registerPasswordPolicy.strength === "medium" ? "Média" : "Forte"}</strong></div>
+                    <div className="password-strength-track"><i /><i /><i /></div>
+                    <div className="password-requirements">
+                      <span className={registerPasswordPolicy.checks.length ? "met" : ""}><Check size={12} /> 8 caracteres</span>
+                      <span className={registerPasswordPolicy.checks.uppercase ? "met" : ""}><Check size={12} /> Maiúscula</span>
+                      <span className={registerPasswordPolicy.checks.number ? "met" : ""}><Check size={12} /> Número</span>
+                      <span className={registerPasswordPolicy.checks.symbol ? "met" : ""}><Check size={12} /> Símbolo</span>
+                    </div>
+                  </div>
+                )}
+                <label className="auth-field">
+                  <span>Confirme sua senha</span>
+                  <input type="password" value={registerPasswordConfirm} onChange={(event) => setRegisterPasswordConfirm(event.target.value)} placeholder="Digite a senha novamente" autoComplete="new-password" maxLength={128} required />
+                </label>
+                {registerPasswordConfirm && <div className={"password-match " + (registerPassword === registerPasswordConfirm ? "matched" : "unmatched")}>{registerPassword === registerPasswordConfirm ? "As senhas coincidem." : "As senhas ainda não coincidem."}</div>}
+                {loginError && <div className="auth-error" role="alert"><X size={15} /> {loginError}</div>}
+                <button className="auth-submit" type="submit" disabled={loginSubmitting || !registerUsername.trim() || !registerLicenseKey.trim() || !registerPasswordPolicy.valid || registerPassword !== registerPasswordConfirm}>
+                  {loginSubmitting ? <LoaderCircle className="spin" size={17} /> : <span>Ativar minha conta <ArrowRight size={16} /></span>}
+                </button>
+                <button className="auth-mode-switch" type="button" onClick={() => { setAuthMode("login"); setLoginError(""); }}>
+                  Já tem uma conta? <strong>Entrar</strong>
+                </button>
+                <div className="auth-security-note"><ShieldCheck size={15} /><span>Sua senha é validada no servidor e enviada ao KeyAuth somente por HTTPS.</span></div>
+              </form>
+            )}
+            <div className="auth-card-bottom"><LockKeyhole size={12} /> LICENÇA KEYAUTH · PERMISSÕES POR PERFIL</div>
           </section>
         </div>
       </div>
@@ -1028,7 +1156,7 @@ function App() {
                     <div className="profile-editor-identity">
                       <ProfileAvatar profile={profileDraft} className="profile-large-avatar" />
                       <div className="profile-editor-copy">
-                        <span className="profile-editor-kicker"><UserRound size={12} /> PERFIL DO PROPRIETÁRIO</span>
+                        <span className="profile-editor-kicker"><UserRound size={12} /> {userRole === "admin" ? "PERFIL ADMINISTRATIVO" : "MEU PERFIL"}</span>
                         <h3>{profileDraft.displayName || "Seu nome"}</h3>
                         <p>{profileDraft.title || "Cargo ou identificação"} · @{adminUsername}</p>
                       </div>
@@ -1065,7 +1193,7 @@ function App() {
                     </div>
                     <div className="profile-meta-row">
                       <div><span>Usuário de acesso</span><strong>{adminUsername}</strong><small>Identificador usado no login. Não é alterado pelo nome de exibição.</small></div>
-                      <div><span>Nível de acesso</span><strong>Proprietário · Administrador</strong><small>Acesso administrativo principal do IPTV Flow.</small></div>
+                      <div><span>Nível de acesso</span><strong>{userRole === "admin" ? (adminUsername === "1joaodev" ? "Proprietário · Administrador" : "Administrador") : "Usuário"}</strong><small>{userRole === "admin" ? "Acesso administrativo autorizado pelo servidor." : "Acesso comum liberado por licença KeyAuth."}</small></div>
                     </div>
                     <div className="profile-editor-actions">
                       <button className="secondary-button" type="button" onClick={() => setProfileDraft(profile)}>Descartar alterações</button>
@@ -1074,11 +1202,11 @@ function App() {
                       <button className="primary-button" type="submit"><Check size={15} /> Salvar perfil</button>
                     </div>
                   </form>
-                  <div className="profile-storage-note"><ShieldCheck size={14} /><span>As personalizações ficam salvas neste navegador e neste dispositivo. A senha e o usuário de acesso continuam protegidos no servidor.</span></div>
+                  <div className="profile-storage-note"><ShieldCheck size={14} /><span>As personalizações ficam salvas neste navegador e neste dispositivo. Sua senha é gerenciada pelo serviço de autenticação.</span></div>
                 </section>
-                <section className="panel settings-panel"><div className="settings-heading"><span className="settings-icon"><RadioTower size={19} /></span><div><h3>Integração de automação</h3><p>Conexão entre o aplicativo e o serviço que processa as solicitações.</p></div><span className={"config-value " + (automationReady ? "configured" : "pending")}>{workerHealth === "checking" ? "Verificando" : automationReady ? "Ativo" : workerHealth === "online" ? "Pausado" : "Offline"}</span></div><div className="settings-row"><div><strong>Proxy seguro da aplicação</strong><small>A chave do worker permanece no servidor Vercel.</small></div><span className="config-value configured">Configurado</span></div><div className="settings-row"><div><strong>Autenticação administrativa</strong><small>Acesso por sessão segura, sem armazenar senha no navegador.</small></div><span className="config-value configured">Protegida</span></div><div className="settings-row"><div><strong>Worker de automação</strong><small>Processador Playwright executado em servidor persistente.</small></div><span className={"config-value " + (workerHealth === "online" ? "configured" : "pending")}>{workerHealth === "checking" ? "Verificando" : workerHealth === "online" ? "Online" : "Offline"}</span></div><div className="settings-row"><div><strong>Conexão FUTEX</strong><small>O worker usa o atendimento original da FUTEX e devolve os dados ao IPTV Flow.</small></div><span className={"config-value " + (automationReady ? "configured" : "pending")}>{workerAutomationEnabled ? "Ativa" : "Desativada"}</span></div><div className="settings-row"><div><strong>Formulário próprio + FUTEX</strong><small>O usuário preenche o formulário próprio; a FUTEX processa o teste em segundo plano.</small></div><span className="config-value configured">Integração</span></div>
+                {userRole === "admin" && <><section className="panel settings-panel"><div className="settings-heading"><span className="settings-icon"><RadioTower size={19} /></span><div><h3>Integração de automação</h3><p>Conexão entre o aplicativo e o serviço que processa as solicitações.</p></div><span className={"config-value " + (automationReady ? "configured" : "pending")}>{workerHealth === "checking" ? "Verificando" : automationReady ? "Ativo" : workerHealth === "online" ? "Pausado" : "Offline"}</span></div><div className="settings-row"><div><strong>Proxy seguro da aplicação</strong><small>A chave do worker permanece no servidor Vercel.</small></div><span className="config-value configured">Configurado</span></div><div className="settings-row"><div><strong>Autenticação administrativa</strong><small>Acesso por sessão segura, sem armazenar senha no navegador.</small></div><span className="config-value configured">Protegida</span></div><div className="settings-row"><div><strong>Worker de automação</strong><small>Processador Playwright executado em servidor persistente.</small></div><span className={"config-value " + (workerHealth === "online" ? "configured" : "pending")}>{workerHealth === "checking" ? "Verificando" : workerHealth === "online" ? "Online" : "Offline"}</span></div><div className="settings-row"><div><strong>Conexão FUTEX</strong><small>O worker usa o atendimento original da FUTEX e devolve os dados ao IPTV Flow.</small></div><span className={"config-value " + (automationReady ? "configured" : "pending")}>{workerAutomationEnabled ? "Ativa" : "Desativada"}</span></div><div className="settings-row"><div><strong>Formulário próprio + FUTEX</strong><small>O usuário preenche o formulário próprio; a FUTEX processa o teste em segundo plano.</small></div><span className="config-value configured">Integração</span></div>
 <div className="settings-callout"><LockKeyhole size={16} /><p>A sessão administrativa usa cookie HttpOnly, Secure e SameSite=Strict. A senha é validada exclusivamente no servidor; o token interno do worker nunca é enviado ao navegador.</p></div><button className="secondary-button" type="button" onClick={() => void checkWorkerHealth()}><RefreshCw size={14} /> Verificar conexão</button><button className="secondary-button" type="button" onClick={() => void runFutexDiagnostic()} disabled={diagnosingFutex || workerHealth !== "online"}>{diagnosingFutex ? <LoaderCircle className="spin" size={14} /> : <Activity size={14} />} {diagnosingFutex ? "Analisando site..." : "Diagnosticar FUTEX"}</button>{futexDiagnostic && <><pre className="diagnostic-output">{futexDiagnostic}</pre><button className="text-button" type="button" onClick={() => void copyValue("Diagnóstico", futexDiagnostic)}><Copy size={14} /> Copiar diagnóstico</button></>}</section>
-                <section className="panel settings-panel"><div className="settings-heading"><span className="settings-icon"><Gauge size={19} /></span><div><h3>Ambiente do aplicativo</h3><p>Informações de execução desta versão.</p></div></div><div className="settings-row"><div><strong>Interface web</strong><small>Aplicação React responsiva.</small></div><span className="config-value configured">Operacional</span></div><div className="settings-row"><div><strong>Armazenamento local</strong><small>Rascunhos salvos neste navegador.</small></div><span className="config-value configured">Ativo</span></div><div className="settings-row"><div><strong>Sincronização entre dispositivos</strong><small>Histórico persistido no volume do servidor worker.</small></div><span className="config-value configured">Preparada</span></div></section>
+                <section className="panel settings-panel"><div className="settings-heading"><span className="settings-icon"><Gauge size={19} /></span><div><h3>Ambiente do aplicativo</h3><p>Informações de execução desta versão.</p></div></div><div className="settings-row"><div><strong>Interface web</strong><small>Aplicação React responsiva.</small></div><span className="config-value configured">Operacional</span></div><div className="settings-row"><div><strong>Armazenamento local</strong><small>Rascunhos salvos neste navegador.</small></div><span className="config-value configured">Ativo</span></div><div className="settings-row"><div><strong>Sincronização entre dispositivos</strong><small>Histórico persistido no volume do servidor worker.</small></div><span className="config-value configured">Preparada</span></div></section></>}
               </div>
             </section>
           )}

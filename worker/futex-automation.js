@@ -476,7 +476,8 @@ export async function readFutexConversation(session) {
 
 async function waitForFutexBotReply(session, previousBotCount, timeout = 45_000) {
   const scope = session.scope || session.page;
-  await scope.locator("body").evaluate((body, previousCount) => new Promise((resolve, reject) => {
+  await scope.locator("body").evaluate((body, options) => new Promise((resolve, reject) => {
+    const { previousBotCount, timeoutMs } = options;
     const findChatRoot = (root) => {
       if (root.querySelector?.(".messages")) return root;
       for (const host of Array.from(root.querySelectorAll("*"))) {
@@ -493,23 +494,25 @@ async function waitForFutexBotReply(session, previousBotCount, timeout = 45_000)
       return;
     }
     const countBotMessages = () => root.querySelectorAll(".messages .msg.bot").length;
-    if (countBotMessages() > previousCount) {
+    if (countBotMessages() > previousBotCount) {
       resolve(true);
       return;
     }
+
+    let timer;
     const observer = new MutationObserver(() => {
-      if (countBotMessages() > previousCount) {
+      if (countBotMessages() > previousBotCount) {
         observer.disconnect();
         clearTimeout(timer);
         resolve(true);
       }
     });
     observer.observe(container, { childList: true, subtree: true, characterData: true });
-    const timer = setTimeout(() => {
+    timer = setTimeout(() => {
       observer.disconnect();
       reject(new Error("A FUTEX ainda não respondeu. Aguarde e atualize a conversa."));
-    }, timeout);
-  }), previousBotCount, { timeout: timeout + 5_000 });
+    }, timeoutMs);
+  }), { previousBotCount, timeoutMs: timeout }, { timeout: timeout + 5_000 });
   await session.page.waitForTimeout(350);
 }
 

@@ -1,4 +1,4 @@
-import { isSameOriginRequest, verifyAdminSession } from "../lib/admin-auth.js";
+import { isSameOriginRequest, verifyUserSession } from "../lib/admin-auth.js";
 
 const allowedRoutes = [
   { method: "GET", pattern: /^\/api\/health$/ },
@@ -21,8 +21,19 @@ export default async function handler(req, res) {
     return res.status(403).json({ message: "Origem da requisição não autorizada." });
   }
 
-  if (!verifyAdminSession(req)) {
-    return res.status(401).json({ message: "Sessão administrativa expirada. Entre novamente." });
+  const session = verifyUserSession(req);
+  if (!session) return res.status(401).json({ message: "Sessão expirada. Entre novamente." });
+
+  const queryPath = typeof req.query?.path === "string"
+    ? req.query.path
+    : Array.isArray(req.query?.path) && req.query.path.length === 1
+      ? req.query.path[0]
+      : "";
+  const urlPath = new URL(req.url || "/", "http://localhost");
+  const route = queryPath || urlPath.searchParams.get("path") || "";
+  const normalizedRoute = route.startsWith("/") ? route : "/" + route;
+  if (normalizedRoute === "/api/diagnostics/futex" && session.role !== "admin") {
+    return res.status(403).json({ message: "Apenas administradores podem executar diagnósticos." });
   }
 
   const workerBase = process.env.WORKER_API_URL;
@@ -33,14 +44,6 @@ export default async function handler(req, res) {
     });
   }
 
-  const queryPath = typeof req.query?.path === "string"
-    ? req.query.path
-    : Array.isArray(req.query?.path) && req.query.path.length === 1
-      ? req.query.path[0]
-      : "";
-  const urlPath = new URL(req.url || "/", "http://localhost");
-  const route = queryPath || urlPath.searchParams.get("path") || "";
-  const normalizedRoute = route.startsWith("/") ? route : "/" + route;
   const allowed = allowedRoutes.some((item) => item.method === req.method && item.pattern.test(normalizedRoute));
   if (!allowed) return res.status(404).json({ message: "Rota não encontrada." });
 
@@ -62,6 +65,8 @@ export default async function handler(req, res) {
       headers: {
         Accept: "application/json",
         Authorization: "Bearer " + workerToken,
+        "X-IPTVFlow-User": session.username,
+        "X-IPTVFlow-Role": session.role,
         ...(req.method === "POST" ? { "Content-Type": "application/json" } : {}),
       },
       body: req.method === "POST" ? JSON.stringify(req.body ?? {}) : undefined,

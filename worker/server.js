@@ -20,6 +20,7 @@ import {
   inspectFutexPage,
 } from "./futex-automation.js";
 import { extractRecommendedApp } from "./futex-parser.js";
+import { AuthStore } from "./auth-store.js";
 
 const app = express();
 const dataEncryptionKey = createDataEncryptionKey(process.env.DATA_ENCRYPTION_KEY, process.env.NODE_ENV === "production");
@@ -34,6 +35,12 @@ const allowedOrigins = (process.env.ALLOWED_ORIGINS || "")
   .map((origin) => origin.trim())
   .filter(Boolean);
 const apiToken = process.env.API_TOKEN || "";
+const ownerUsername = String(process.env.OWNER_USERNAME || process.env.ADMIN_USERNAME || "1joaodev").trim().toLowerCase();
+const authStore = new AuthStore({
+  filePath: path.join(dataDirectory, "auth.json"),
+  pepper: process.env.AUTH_KEY_PEPPER || apiToken || "iptv-flow-local-development-auth-pepper",
+  ownerUsername,
+});
 const automationEnabled = process.env.FUTEX_AUTOMATION_ENABLED === "true";
 const minIntervalMs = Math.max(0, Number(process.env.MIN_SECONDS_BETWEEN_REQUESTS || 30)) * 1000;
 const maxActiveSessions = Math.max(1, Number(process.env.MAX_ACTIVE_SESSIONS || 1));
@@ -46,15 +53,16 @@ if (process.env.NODE_ENV === "production" && apiToken.length < 32) {
 }
 
 function requestIdentity(req) {
+  if (req.iptvflowIdentity) return req.iptvflowIdentity;
   return {
     username: String(req.get("x-iptvflow-user") || "").trim().toLowerCase(),
-    role: req.get("x-iptvflow-role") === "admin" ? "admin" : "user",
+    role: req.get("x-iptvflow-role") === "owner" ? "owner" : req.get("x-iptvflow-role") === "admin" ? "admin" : "user",
   };
 }
 
 function canAccessJob(req, job) {
   const identity = requestIdentity(req);
-  return identity.role === "admin" || Boolean(identity.username && job?.ownerUsername === identity.username);
+  return identity.role !== "user" || Boolean(identity.username && job?.ownerUsername === identity.username);
 }
 
 function safeJob(job) {
@@ -190,6 +198,138 @@ app.use("/api", (req, res, next) => {
   return requireApiToken(req, res, next);
 });
 
+app.use("/api", async (req, res, next) => {
+  const route = String(req.originalUrl || "").split("?")[0];
+  if (["/api/auth/login", "/api/auth/register", "/api/auth/validate"].includes(route)) return next();
+
+  const username = String(req.get("x-iptvflow-user") || "").trim().toLowerCase();
+  if (!username) return res.status(401).json({ message: "Sessão inválida." });
+
+  if (username === authStore.ownerUsername) {
+    req.iptvflowIdentity = { username, role: "owner" };
+    return next();
+  }
+
+  try {
+    const user = await authStore.getUser(username);
+    if (!user || user.status !== "active") {
+      return res.status(401).json({ message: "Conta inativa ou sessão expirada. Entre novamente." });
+    }
+    req.iptvflowIdentity = { username, role: user.role };
+    return next();
+  } catch {
+    return res.status(503).json({ message: "Não foi possível validar sua conta no momento." });
+  }
+});
+
+app.post("/api/auth/login", async (req, res) => {
+  const username = typeof req.body?.username === "string" ? req.body.username : "";
+  const password = typeof req.body?.password === "string" ? req.body.password : "";
+  if (!username || !password || password.length > 128) {
+    return res.status(400).json({ message: "Informe usuário e senha válidos." });
+  }
+  try {
+    const user = await authStore.authenticate({ username, password });
+    if (!user) return res.status(401).json({ message: "Usuário ou senha inválidos." });
+    return res.status(200).json({ authenticated: true, user });
+  } catch (error) {
+    return res.status(error?.statusCode || 500).json({ message: error?.message || "Não foi possível autenticar." });
+  }
+});
+
+app.post("/api/auth/register", async (req, res) => {
+  const username = typeof req.body?.username === "string" ? req.body.username : "";
+  const password = typeof req.body?.password === "string" ? req.body.password : "";
+  const accessKey = typeof req.body?.accessKey === "string" ? req.body.accessKey : "";
+  try {
+    const user = await authStore.register({ username, password, accessKey });
+    return res.status(201).json({ authenticated: true, user });
+  } catch (error) {
+    return res.status(error?.statusCode || 500).json({ message: error?.message || "Não foi possível criar a conta." });
+  }
+});
+
+app.post("/api/auth/validate", async (req, res) => {
+  const username = typeof req.body?.username === "string" ? req.body.username : "";
+  try {
+    const user = await authStore.validateSession(username);
+    if (!user || user.status !== "active") return res.status(401).json({ authenticated: false });
+    return res.status(200).json({ authenticated: true, user });
+  } catch {
+    return res.status(503).json({ message: "Não foi possível validar a sessão." });
+  }
+});
+
+function requireStaff(req, res) {
+  const actor = requestIdentity(req);
+  if (!["owner", "admin"].includes(actor.role)) {
+    res.status(403).json({ message: "Somente proprietários e administradores podem acessar o gerenciamento de chaves." });
+    return null;
+  }
+  return actor;
+}
+
+app.get("/api/auth/keys", async (req, res) => {
+  if (!requireStaff(req, res)) return;
+  try {
+    return res.json({ items: await authStore.listAccessKeys() });
+  } catch {
+    return res.status(503).json({ message: "Não foi possível carregar as chaves." });
+  }
+});
+
+app.post("/api/auth/keys", async (req, res) => {
+  const actor = requireStaff(req, res);
+  if (!actor) return;
+  try {
+    const expiresInDays = req.body?.expiresInDays === null ? null : Number(req.body?.expiresInDays ?? 30);
+    const result = await authStore.createAccessKey({
+      actor,
+      label: req.body?.label,
+      expiresInDays,
+    });
+    return res.status(201).json(result);
+  } catch (error) {
+    return res.status(error?.statusCode || 500).json({ message: error?.message || "Não foi possível gerar a chave." });
+  }
+});
+
+app.post("/api/auth/keys/:id/revoke", async (req, res) => {
+  const actor = requireStaff(req, res);
+  if (!actor) return;
+  try {
+    const item = await authStore.revokeAccessKey({ id: req.params.id, actor });
+    return res.json({ accessKey: item });
+  } catch (error) {
+    return res.status(error?.statusCode || 500).json({ message: error?.message || "Não foi possível revogar a chave." });
+  }
+});
+
+app.get("/api/auth/users", async (req, res) => {
+  const actor = requestIdentity(req);
+  if (actor.role !== "owner") return res.status(403).json({ message: "Somente o proprietário pode gerenciar administradores." });
+  try {
+    return res.json({ items: await authStore.listUsers() });
+  } catch {
+    return res.status(503).json({ message: "Não foi possível carregar os usuários." });
+  }
+});
+
+app.post("/api/auth/users/role", async (req, res) => {
+  const actor = requestIdentity(req);
+  if (actor.role !== "owner") return res.status(403).json({ message: "Somente o proprietário pode alterar permissões." });
+  try {
+    const user = await authStore.setUserRole({
+      username: req.body?.username,
+      role: req.body?.role,
+      actor,
+    });
+    return res.json({ user });
+  } catch (error) {
+    return res.status(error?.statusCode || 500).json({ message: error?.message || "Não foi possível alterar o nível de acesso." });
+  }
+});
+
 app.get("/api/health", (_req, res) => {
   res.setHeader("Cache-Control", "no-store");
   res.json({
@@ -202,7 +342,7 @@ app.get("/api/health", (_req, res) => {
 });
 
 app.get("/api/diagnostics/futex", async (req, res) => {
-  if (requestIdentity(req).role !== "admin") return res.status(403).json({ message: "Apenas administradores podem executar diagnósticos." });
+  if (requestIdentity(req).role === "user") return res.status(403).json({ message: "Apenas administradores podem executar diagnósticos." });
   try {
     const diagnostic = await inspectFutexPage();
     res.setHeader("Cache-Control", "no-store");
@@ -218,7 +358,7 @@ app.get("/api/test-requests", (req, res) => {
   const identity = requestIdentity(req);
   if (!identity.username) return res.status(401).json({ message: "Sessão inválida." });
   const items = [...jobs.values()]
-    .filter((job) => identity.role === "admin" || job.ownerUsername === identity.username)
+    .filter((job) => identity.role !== "user" || job.ownerUsername === identity.username)
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
     .map(safeJob);
   res.setHeader("Cache-Control", "no-store");
@@ -446,6 +586,7 @@ app.post("/api/test-requests/:id/app-confirmation", (req, res) => {
 });
 
 await loadJobs();
+await authStore.init();
 
 const server = app.listen(port, () => {
   console.log("IPTV Flow Worker listening on port " + port);

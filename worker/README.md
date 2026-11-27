@@ -108,13 +108,15 @@ Todas as rotas `/api` exigem `Authorization: Bearer <API_TOKEN>` em produção. 
 1. Crie um projeto Railway e conecte este repositório.
 2. Configure o **Root Directory** como `/worker`.
 3. O Railway detectará o `Dockerfile` e instalará Chromium com as dependências de sistema.
-4. Adicione um **Volume** montado em `/data`.
+4. Adicione um **Volume** montado em `/data`. Ele precisa permanecer anexado ao serviço para preservar `jobs.json` e `auth.json` entre deploys e reinicializações.
 5. Configure as variáveis:
    - `NODE_ENV=production`
    - `PORT=8787`
    - `DATA_DIR=/data`
    - `DATA_ENCRYPTION_KEY=<chave hexadecimal de 64 caracteres>`
    - `API_TOKEN=<token aleatório com pelo menos 32 caracteres>`
+   - `OWNER_USERNAME=1joaodev`
+   - `AUTH_KEY_PEPPER=<segredo aleatório estável com pelo menos 32 caracteres>`
    - `FUTEX_URL=https://futex.com.br/teste/`
    - `FUTEX_AUTOMATION_ENABLED=false` até concluir a validação
    - `FUTEX_HEADLESS=true`

@@ -2,16 +2,15 @@ import {
   ADMIN_SESSION_TTL_SECONDS,
   clearLoginFailures,
   createUserSession,
+  getAdminUsername,
   isAuthConfigured,
   isSameOriginRequest,
   loginRateLimit,
   recordLoginFailure,
   setAdminSessionCookie,
   verifyAdminCredentials,
-  getAdminUsername,
-  isAdminUsername,
 } from "../../lib/admin-auth.js";
-import { isKeyAuthConfigured, loginKeyAuthAccount } from "../../lib/keyauth.js";
+import { workerAuthRequest } from "../../lib/worker-auth-client.js";
 
 export default async function handler(req, res) {
   res.setHeader("Cache-Control", "no-store, max-age=0");
@@ -25,7 +24,7 @@ export default async function handler(req, res) {
     return res.status(403).json({ message: "Origem da requisição não autorizada." });
   }
   if (!isAuthConfigured()) {
-    return res.status(503).json({ message: "A autenticação ainda não foi configurada no servidor." });
+    return res.status(503).json({ message: "A autenticação do proprietário ainda não foi configurada no servidor." });
   }
 
   const limit = loginRateLimit(req);
@@ -35,42 +34,45 @@ export default async function handler(req, res) {
   }
 
   const body = req.body && typeof req.body === "object" ? req.body : {};
-  const username = typeof body.username === "string" ? body.username.slice(0, 64) : "";
+  const username = typeof body.username === "string" ? body.username.trim().toLowerCase().slice(0, 64) : "";
   const password = typeof body.password === "string" ? body.password : "";
-  if (!username || !password || password.length > 256) {
+  if (!username || !password || password.length > 128) {
     recordLoginFailure(req);
     return res.status(401).json({ message: "Usuário ou senha inválidos." });
   }
 
-  const normalizedUsername = username.trim().toLowerCase();
-  let authenticated = false;
-
-  if (normalizedUsername === getAdminUsername()) {
-    authenticated = verifyAdminCredentials(normalizedUsername, password);
+  let role = "user";
+  if (username === getAdminUsername()) {
+    if (!verifyAdminCredentials(username, password)) {
+      recordLoginFailure(req);
+      return res.status(401).json({ message: "Usuário ou senha inválidos." });
+    }
+    role = "owner";
   } else {
-    if (!isKeyAuthConfigured()) {
-      return res.status(503).json({ message: "O acesso de usuários ainda aguarda a configuração do KeyAuth." });
-    }
     try {
-      const result = await loginKeyAuthAccount({ username: normalizedUsername, password });
-      authenticated = result.success === true;
-    } catch {
-      return res.status(502).json({ message: "Não foi possível validar sua conta no KeyAuth. Tente novamente." });
+      const result = await workerAuthRequest("/api/auth/login", {
+        method: "POST",
+        body: { username, password },
+      });
+      if (result.status !== 200 || result.data?.authenticated !== true || !result.data?.user) {
+        recordLoginFailure(req);
+        return res.status(result.status >= 400 ? result.status : 401).json({
+          message: result.data?.message || "Usuário ou senha inválidos.",
+        });
+      }
+      role = result.data.user.role === "admin" ? "admin" : "user";
+    } catch (error) {
+      return res.status(error?.statusCode || 502).json({ message: error?.message || "Não foi possível validar sua conta." });
     }
-  }
-
-  if (!authenticated) {
-    recordLoginFailure(req);
-    return res.status(401).json({ message: "Usuário ou senha inválidos, ou licença sem validade." });
   }
 
   clearLoginFailures(req);
   try {
-    const token = createUserSession(normalizedUsername);
+    const token = createUserSession(username, role);
     setAdminSessionCookie(res, token);
     return res.status(200).json({
       authenticated: true,
-      user: { username: normalizedUsername, role: isAdminUsername(normalizedUsername) ? "admin" : "user" },
+      user: { username, role },
       expiresIn: ADMIN_SESSION_TTL_SECONDS,
     });
   } catch {

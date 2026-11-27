@@ -16,7 +16,7 @@ function cleanRecommendedApp(value) {
     .trim();
 
   candidate = candidate
-    .replace(/\s+(?:na|no|pela|através da|por meio da)\s+(?:app store|play store|loja(?: de aplicativos)?|seu aparelho|seu dispositivo|iphone|ipad).*$/i, "")
+    .replace(/\s+(?:na|no|pela|através da|por meio da)\s+(?:app store|play store|loja(?: de aplicativos)?|seu aparelho|seu dispositivo|seu iphone|seu ipad|iphone|ipad).*$/i, "")
     .replace(/\s+para\s+(?:o\s+)?(?:iphone|ipad|ios|seu aparelho|seu dispositivo).*$/i, "")
     .replace(/\s+(?:disponível|disponivel|encontrado|encontrado na|na loja|na app store|na play store).*$/i, "")
     .replace(/\s+(?:e depois|para continuar|para assistir|para acessar).*$/i, "")

@@ -17,6 +17,8 @@ function cleanRecommendedApp(value) {
 
   candidate = candidate
     .replace(/\s+(?:na|no|pela|através da|por meio da)\s+(?:app store|play store|loja(?: de aplicativos)?|seu aparelho|seu dispositivo|iphone|ipad).*$/i, "")
+    .replace(/\s+para\s+(?:o\s+)?(?:iphone|ipad|ios|seu aparelho|seu dispositivo).*$/i, "")
+    .replace(/\s+(?:disponível|disponivel|encontrado|encontrado na|na loja|na app store|na play store).*$/i, "")
     .replace(/\s+(?:e depois|para continuar|para assistir|para acessar).*$/i, "")
     .replace(/[\s"'“”‘’:;,.!?–—-]+$/u, "")
     .trim();
@@ -30,16 +32,20 @@ function cleanRecommendedApp(value) {
 
 export function extractRecommendedApp(text) {
   const patterns = [
-    /aplicativo indicado(?:\s+para\s+[^:,.!?;\n]+)?\s*(?:é|:|=)\s*(?:o\s+)?([^.!;\n]+)/gi,
-    /aplicativo recomendado(?:\s+para\s+[^:,.!?;\n]+)?\s*(?:é|:|=)\s*(?:o\s+)?([^.!;\n]+)/gi,
+    /(?:o\s+)?aplicativo indicado(?:\s+(?:pela|por)\s+futex)?(?:\s+para\s+[^:,.!?;\n]+)?\s*(?:é|:|=)\s*(?:o\s+)?([^.!;\n]+)/gi,
+    /(?:o\s+)?aplicativo recomendado(?:\s+(?:pela|por)\s+futex)?(?:\s+para\s+[^:,.!?;\n]+)?\s*(?:é|:|=)\s*(?:o\s+)?([^.!;\n]+)/gi,
+    /(?:a\s+)?futex\s+(?:indica|recomenda|sugere)\s+(?:o\s+)?(?:aplicativo|app)\s+(?:chamado|denominado|de nome)?\s*[:\-]?\s*([^.!;\n]+)/gi,
     /(?:nome do aplicativo|nome do app)\s*(?:é|:|=)?\s*(?:o\s+)?([^.!;\n]+)/gi,
     /(?:app|aplicativo)\s+(?:indicado|recomendado)\s*[:=]\s*(?:o\s+)?([^.!;\n]+)/gi,
+    /(?:app|aplicativo)\s*[:=]\s*(?:o\s+)?([^.!;\n]+)/gi,
     /(?:recomendamos|recomendo|indicamos|indico)\s+(?:o\s+)?(?:aplicativo|app)\s+(?:chamado|denominado|de nome)?\s*[:\-]?\s*([^.!;\n]+)/gi,
-    /(?:recomendamos|recomendo|indicamos|indico)\s+(?:que você\s+)?(?:instale|baixe|use|utilize)\s+(?:o\s+)?(?:aplicativo|app)\s+([^.!;\n]+)/gi,
+    /(?:recomendamos|recomendo|indicamos|indico)\s+(?:que você\s+)?(?:instale|baixe|use|utilize|instalar|baixar|usar|utilizar)\s+(?:o\s+)?(?:aplicativo|app)\s+([^.!;\n]+)/gi,
+    /(?:a\s+)?futex\s+(?:recomenda|indica)\s+(?:que você\s+)?(?:instale|baixe|use|utilize)\s+(?:o\s+)?(?:aplicativo|app)\s+([^.!;\n]+)/gi,
     /(?:baixe|instale|procure|pesquise|utilize|use|abra)\s+(?:o\s+)?(?:aplicativo|app)\s+(.+?)\s+(?:na|no|pela)\s+(?:app store|play store|loja(?: de aplicativos)?|seu aparelho|seu dispositivo|iphone|ipad)/gi,
     /(?:baixe|instale|procure|pesquise|utilize|use|abra)\s+(?:o\s+)?(.+?)\s+(?:na|no|pela)\s+(?:app store|play store|loja(?: de aplicativos)?|seu iphone|seu ipad)/gi,
     /(?:instale|baixe|procure|pesquise|utilize|use)\s+(?:o\s+)?(?:aplicativo|app)\s+(.+?)\s+(?:no seu aparelho|no seu dispositivo|no iphone|no ipad|em seu aparelho|em seu iphone|em seu ipad)/gi,
     /(?:para\s+(?:o\s+)?(?:iphone|ipad|ios)[^.!;\n]*?\b(?:instale|baixe|use|utilize)\s+(?:o\s+)?(?:aplicativo|app)?\s*)([^.!;\n]+)/gi,
+    /(?:aplicativo|app)\s+para\s+(?:o\s+)?(?:iphone|ipad|ios)\s*(?:é|:|=)\s*(?:o\s+)?([^.!;\n]+)/gi,
     /instale o\s+([^.!;\n]+?)\s+(?:na sua tv|no seu aparelho)/gi,
     /app recomendado(?: é|:)?\s*(?:o\s+)?([^.!;\n]+)/gi,
   ];

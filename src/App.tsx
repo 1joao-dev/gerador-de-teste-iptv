@@ -824,7 +824,7 @@ function App() {
         <header className="topbar">
           <div className="topbar-left">
             <button className="icon-button mobile-menu-trigger" onClick={() => setMobileMenuOpen(true)} aria-label="Abrir menu"><Menu size={20} /></button>
-            <div className="breadcrumb"><span>Workspace</span><ChevronRight size={14} /><strong>{navigation.find((item) => item.id === page)?.label}</strong></div>
+            <div className={"breadcrumb" + (page === "settings" ? " breadcrumb-settings" : "")}><span>Workspace</span><ChevronRight size={14} /><strong>{navigation.find((item) => item.id === page)?.label}</strong></div>
           </div>
           <div className="topbar-actions">
             <div className={"connection-indicator " + (automationReady ? "connected" : "disconnected")} role="status" aria-live="polite">

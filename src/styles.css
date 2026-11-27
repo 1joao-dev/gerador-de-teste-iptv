@@ -2062,3 +2062,59 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   .profile-editor-actions button { width: 100%; }
   .profile-row { padding: 13px 5px 0; }
 }
+
+
+/* Keep the complete profile avatar visible on the settings header on phones. */
+@media (max-width: 680px) {
+  .topbar-left {
+    min-width: 0;
+    flex: 1 1 auto;
+  }
+
+  /* The settings label is long; hide only the redundant workspace prefix there. */
+  .breadcrumb-settings > span,
+  .breadcrumb-settings > svg {
+    display: none;
+  }
+
+  .breadcrumb-settings {
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+  }
+
+  .breadcrumb-settings strong {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .topbar-actions {
+    flex: 0 0 auto;
+    gap: 7px;
+  }
+
+  .topbar-profile-button {
+    width: 31px;
+    height: 31px;
+    flex: 0 0 31px;
+    overflow: hidden;
+  }
+
+  .topbar-avatar {
+    width: 100%;
+    height: 100%;
+    min-width: 31px;
+    min-height: 31px;
+    flex: 0 0 31px;
+    aspect-ratio: 1 / 1;
+    box-sizing: border-box;
+  }
+
+  .topbar-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center;
+  }
+}

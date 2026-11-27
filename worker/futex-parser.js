@@ -12,7 +12,7 @@ function cleanRecommendedApp(value) {
   let candidate = value
     .replace(/^[\s"'“”‘’:;,.!?–—-]+/u, "")
     .replace(/[🎬📺📲]+$/u, "")
-    .replace(/^[oa]\\s+/iu, "")
+    .replace(/^[oa]\s+/iu, "")
     .trim();
 
   candidate = candidate

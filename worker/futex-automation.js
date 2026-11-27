@@ -231,8 +231,12 @@ async function waitForAppStep(scope, previousText, session) {
     const assistantTranscript = conversation?.chatMessages
       .filter((item) => item.role === "assistant")
       .map((item) => item.text)
-      .join("\\n") || "";
-    const app = extractRecommendedApp(assistantTranscript) || extractRecommendedApp(text);
+      .join("\n") || "";
+    const optionTranscript = conversation?.chatOptions.join("\n") || "";
+    const app = extractRecommendedApp(
+      [assistantTranscript, optionTranscript, text].filter(Boolean).join("\n"),
+    );
+    if (app) session.recommendedApp = app;
     if (!/conseguiu.{0,30}instalar|já instalou|instalou o (?:app|aplicativo)/i.test(text)) {
       throw new Error("A FUTEX não apresentou a confirmação de instalação esperada.");
     }
@@ -694,10 +698,20 @@ export async function continueFutexSession(session, installed) {
     await clickChoiceAny(scope, ["Sim, consegui", "Sim, consegui instalar", "Já instalei", "Sim"]);
     try {
       const text = await waitForText(scope, /seus dados de acesso|dados do teste|acesso liberado|seu teste.*ativo|teste gerado/i, 45_000);
-      const result = extractResult(text) || extractResult(await visibleText(scope));
+      const finalText = await visibleText(scope);
+      const conversation = await readFutexConversation(session).catch(() => undefined);
+      const assistantTranscript = conversation?.chatMessages
+        .filter((item) => item.role === "assistant")
+        .map((item) => item.text)
+        .join("\n") || "";
+      const optionTranscript = conversation?.chatOptions.join("\n") || "";
+      const recommendedApp = session.recommendedApp || extractRecommendedApp(
+        [assistantTranscript, optionTranscript, text, finalText].filter(Boolean).join("\n"),
+      );
+      const result = extractResult(text) || extractResult(finalText);
       if (result) {
         await closeFutexSession(session);
-        return result;
+        return recommendedApp ? { ...result, recommendedApp } : result;
       }
       return {
         status: "needs_human",

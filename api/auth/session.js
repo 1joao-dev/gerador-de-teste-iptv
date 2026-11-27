@@ -31,12 +31,16 @@ export default async function handler(req, res) {
       method: "POST",
       body: { username: session.username },
     });
-    if (result.status === 401 || result.data?.authenticated !== true || !result.data?.user) {
+    if (result.status !== 200) {
+      if (result.status === 401) {
+        clearAdminSessionCookie(res);
+        return res.status(401).json({ authenticated: false });
+      }
+      return res.status(result.status).json({ message: result.data?.message || "Não foi possível validar a sessão." });
+    }
+    if (result.data?.authenticated !== true || !result.data?.user) {
       clearAdminSessionCookie(res);
       return res.status(401).json({ authenticated: false });
-    }
-    if (result.status !== 200) {
-      return res.status(result.status).json({ message: result.data?.message || "Não foi possível validar a sessão." });
     }
 
     const role = result.data.user.role === "admin" ? "admin" : "user";

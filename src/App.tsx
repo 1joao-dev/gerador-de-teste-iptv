@@ -286,10 +286,22 @@ function App() {
 
 
   function updateForm(field: keyof typeof form, value: string) {
-    setForm((current) => ({
-      ...current,
-      [field]: field === "contact" ? formatPhone(value) : value,
-    }));
+    setForm((current) => {
+      if (field === "device") {
+        const isAppleDevice = value === "iPhone / iPad";
+        return {
+          ...current,
+          device: value,
+          brand: isAppleDevice ? "Apple" : current.brand === "Apple" ? "" : current.brand,
+          brandOther: isAppleDevice ? "" : current.brandOther,
+        };
+      }
+
+      return {
+        ...current,
+        [field]: field === "contact" ? formatPhone(value) : value,
+      };
+    });
   }
 
   async function submitRequest(event: FormEvent<HTMLFormElement>) {
@@ -298,12 +310,13 @@ function App() {
     const contact = form.contact.trim();
     const phoneDigits = contact.replace(/\D/g, "");
     const device = form.device;
-    const brand = form.brand === "Outra" ? form.brandOther.trim() : form.brand;
+    const isAppleDevice = device === "iPhone / iPad";
+    const brand = isAppleDevice ? "Apple" : form.brand === "Outra" ? form.brandOther.trim() : form.brand;
 
     if (customerName.length < 2) { setToast("Informe seu nome para continuar."); return; }
     if (phoneDigits.length < 10 || phoneDigits.length > 11) { setToast("Informe um WhatsApp válido com DDD."); return; }
     if (!device) { setToast("Selecione onde você vai assistir."); return; }
-    if (!brand) { setToast("Selecione a marca do aparelho."); return; }
+    if (!isAppleDevice && !brand) { setToast("Selecione a marca do aparelho."); return; }
     if (!automationReady) {
       setToast(workerHealth === "offline" ? "Worker offline. Verifique o servidor de automação." : "A automação ainda não está ativa no servidor.");
       return;
@@ -631,16 +644,18 @@ function App() {
                           </button>;
                         })}
                       </div>
-                      <div className="form-separator" />
-                      <div className="form-section-heading"><span className="step-number">03</span><div><h3>Marca do aparelho</h3><p>Selecione a marca para receber a indicação correta.</p></div></div>
-                      <div className="brand-grid">
-                        {BRAND_OPTIONS.map((brand) => <button type="button" key={brand} className={"brand-option " + (form.brand === brand ? "selected" : "")} onClick={() => { updateForm("brand", brand); if (brand !== "Outra") updateForm("brandOther", ""); }} aria-pressed={form.brand === brand}>
-                          {brand === "Outra" ? <Plus size={14} /> : <span className="brand-option-dot" />}
-                          {brand}
-                          {form.brand === brand && <Check size={13} />}
-                        </button>)}
-                      </div>
-                      {form.brand === "Outra" && <label className="field other-brand-field"><span>Digite a marca</span><input value={form.brandOther} onChange={(event) => updateForm("brandOther", event.target.value)} placeholder="Ex.: Hisense, Toshiba..." maxLength={60} required /></label>}
+                      {form.device !== "iPhone / iPad" && <>
+                        <div className="form-separator" />
+                        <div className="form-section-heading"><span className="step-number">03</span><div><h3>Marca do aparelho</h3><p>Selecione a marca para receber a indicação correta.</p></div></div>
+                        <div className="brand-grid">
+                          {BRAND_OPTIONS.map((brand) => <button type="button" key={brand} className={"brand-option " + (form.brand === brand ? "selected" : "")} onClick={() => { updateForm("brand", brand); if (brand !== "Outra") updateForm("brandOther", ""); }} aria-pressed={form.brand === brand}>
+                            {brand === "Outra" ? <Plus size={14} /> : <span className="brand-option-dot" />}
+                            {brand}
+                            {form.brand === brand && <Check size={13} />}
+                          </button>)}
+                        </div>
+                        {form.brand === "Outra" && <label className="field other-brand-field"><span>Digite a marca</span><input value={form.brandOther} onChange={(event) => updateForm("brandOther", event.target.value)} placeholder="Ex.: Hisense, Toshiba..." maxLength={60} required /></label>}
+                      </>}
                       <div className="form-submit-footer">
                         <div className="form-trust-note"><ShieldCheck size={16} /><span><strong>Seus dados protegidos</strong><small>O teste é solicitado diretamente ao sistema FUTEX.</small></span></div>
                         <button className="primary-button generate-button" type="submit" disabled={submitting || !automationReady}>

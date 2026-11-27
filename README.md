@@ -30,12 +30,17 @@ Em **Project → Settings → Environment Variables**, adicione:
 ```env
 WORKER_API_URL=https://SEU-WORKER.up.railway.app
 WORKER_API_TOKEN=mesmo-token-configurado-no-worker
-APP_ACCESS_CODE=senha-administrativa-aleatoria-de-pelo-menos-32-caracteres
+APP_ACCESS_CODE=senha-forte-do-proprietario-de-pelo-menos-32-caracteres
 APP_SESSION_SECRET=segredo-aleatorio-com-pelo-menos-64-bytes
-ADMIN_USERNAME=admin
+ADMIN_USERNAME=1joaodev
+ADMIN_USERNAMES=1joaodev
+KEYAUTH_APP_NAME=nome-da-aplicacao-no-keyauth
+KEYAUTH_OWNER_ID=owner-id-da-aplicacao
+KEYAUTH_VERSION=1.0
+# KEYAUTH_APP_HASH=hash-da-aplicacao-se-a-verificacao-estiver-ativada
 ```
 
-Gere `APP_ACCESS_CODE` com `openssl rand -hex 32` e `APP_SESSION_SECRET` com `openssl rand -hex 64`. Mantenha ambos privados e diferentes. `ADMIN_USERNAME` é opcional e assume `admin` quando omitido. Não use prefixo `VITE_` nessas variáveis. O login é validado no servidor; a sessão usa cookie `HttpOnly; Secure; SameSite=Strict` com validade de 4 horas. O navegador nunca recebe a senha administrativa nem o token interno do worker. O proxy aceita apenas sessões administrativas válidas. Configure as variáveis em Production e Preview e faça um novo deploy após alterar qualquer segredo.
+Gere `APP_ACCESS_CODE` com `openssl rand -hex 32` e `APP_SESSION_SECRET` com `openssl rand -hex 64`. Mantenha ambos privados e diferentes. `ADMIN_USERNAME` identifica a conta proprietária (neste projeto, `1joaodev`). `ADMIN_USERNAMES` é uma lista separada por vírgulas de contas KeyAuth promovidas manualmente a administradoras; o cadastro público nunca pode escolher o próprio papel. Configure `KEYAUTH_APP_NAME` e `KEYAUTH_OWNER_ID` com os dados da aplicação no KeyAuth; `KEYAUTH_VERSION` assume `1.0` e `KEYAUTH_APP_HASH` é opcional. Não use prefixo `VITE_` nessas variáveis. O cadastro exige licença KeyAuth e senha com pelo menos 8 caracteres, uma maiúscula, um número e um símbolo. A força aparece como Fraca, Média ou Forte. A senha é validada no servidor e a autenticação KeyAuth acontece somente no backend. As sessões usam cookie `HttpOnly; Secure; SameSite=Strict` com validade de 4 horas. O proxy encaminha a identidade autenticada ao worker; cada usuário vê somente seus próprios testes, enquanto administradores veem todos. Configure as variáveis em Production e Preview e faça um novo deploy após alterar qualquer segredo.
 
 ## Configuração do worker
 
@@ -110,4 +115,6 @@ O workflow **FUTEX live diagnostic** abre o portal em um Chromium isolado, ident
 - Sessões expiram após 30 minutos de inatividade.
 - Nome, telefone e credenciais são criptografados com AES-256-GCM antes de serem gravados no histórico do volume privado do worker. Proteja também as chaves e o volume.
 - Reiniciar o worker encerra sessões abertas; as solicitações interrompidas ficam marcadas para ação manual.
-- Para múltiplos usuários, migre o histórico para PostgreSQL e implemente autenticação individual.
+- Contas comuns são criadas com licença KeyAuth e recebem o papel `user`; a conta proprietária `1joaodev` continua protegida por `APP_ACCESS_CODE`.
+- Contas promovidas a administradoras precisam constar manualmente em `ADMIN_USERNAMES`; o cadastro público nunca permite escolher o papel administrativo.
+- O histórico do worker é filtrado por usuário; contas comuns não conseguem consultar solicitações de outras contas.

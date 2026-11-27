@@ -33,14 +33,9 @@ WORKER_API_TOKEN=mesmo-token-configurado-no-worker
 APP_ACCESS_CODE=senha-forte-do-proprietario-de-pelo-menos-32-caracteres
 APP_SESSION_SECRET=segredo-aleatorio-com-pelo-menos-64-bytes
 ADMIN_USERNAME=1joaodev
-ADMIN_USERNAMES=1joaodev
-KEYAUTH_APP_NAME=nome-da-aplicacao-no-keyauth
-KEYAUTH_OWNER_ID=owner-id-da-aplicacao
-KEYAUTH_VERSION=1.0
-# KEYAUTH_APP_HASH=hash-da-aplicacao-se-a-verificacao-estiver-ativada
 ```
 
-Gere `APP_ACCESS_CODE` com `openssl rand -hex 32` e `APP_SESSION_SECRET` com `openssl rand -hex 64`. Mantenha ambos privados e diferentes. `ADMIN_USERNAME` identifica a conta proprietária (neste projeto, `1joaodev`). `ADMIN_USERNAMES` é uma lista separada por vírgulas de contas KeyAuth promovidas manualmente a administradoras; o cadastro público nunca pode escolher o próprio papel. Configure `KEYAUTH_APP_NAME` e `KEYAUTH_OWNER_ID` com os dados da aplicação no KeyAuth; `KEYAUTH_VERSION` assume `1.0` e `KEYAUTH_APP_HASH` é opcional. Não use prefixo `VITE_` nessas variáveis. O cadastro exige licença KeyAuth e senha com pelo menos 8 caracteres, uma maiúscula, um número e um símbolo. A força aparece como Fraca, Média ou Forte. A senha é validada no servidor e a autenticação KeyAuth acontece somente no backend. As sessões usam cookie `HttpOnly; Secure; SameSite=Strict` com validade de 4 horas. O proxy encaminha a identidade autenticada ao worker; cada usuário vê somente seus próprios testes, enquanto administradores veem todos. Configure as variáveis em Production e Preview e faça um novo deploy após alterar qualquer segredo.
+Gere `APP_ACCESS_CODE` com `openssl rand -hex 32` e `APP_SESSION_SECRET` com `openssl rand -hex 64`. Mantenha ambos privados e diferentes. `ADMIN_USERNAME=1joaodev` identifica a conta proprietária, que usa `APP_ACCESS_CODE` como senha principal. Não use prefixo `VITE_` nas variáveis secretas. O cadastro público exige uma chave interna de uso único gerada no próprio painel por um proprietário ou administrador. As senhas de todas as contas comuns exigem pelo menos 8 caracteres, uma maiúscula, um número e um símbolo; a força aparece como Fraca, Média ou Forte. As senhas são armazenadas com scrypt e as chaves de acesso somente como hashes HMAC no volume persistente do worker. Administradores podem gerar, consultar e revogar chaves; somente o proprietário pode promover ou rebaixar administradores. As sessões usam cookie `HttpOnly; Secure; SameSite=Strict` com validade de 4 horas. O worker valida o papel atual em cada requisição e cada usuário vê somente seus próprios testes, enquanto administradores veem todos. Configure as variáveis em Production e Preview e faça um novo deploy após alterar qualquer segredo.
 
 ## Configuração do worker
 
@@ -115,6 +110,7 @@ O workflow **FUTEX live diagnostic** abre o portal em um Chromium isolado, ident
 - Sessões expiram após 30 minutos de inatividade.
 - Nome, telefone e credenciais são criptografados com AES-256-GCM antes de serem gravados no histórico do volume privado do worker. Proteja também as chaves e o volume.
 - Reiniciar o worker encerra sessões abertas; as solicitações interrompidas ficam marcadas para ação manual.
-- Contas comuns são criadas com licença KeyAuth e recebem o papel `user`; a conta proprietária `1joaodev` continua protegida por `APP_ACCESS_CODE`.
-- Contas promovidas a administradoras precisam constar manualmente em `ADMIN_USERNAMES`; o cadastro público nunca permite escolher o papel administrativo.
+- Contas comuns são criadas com uma chave interna de uso único e recebem o papel `user`; a conta proprietária `1joaodev` continua protegida por `APP_ACCESS_CODE`.
+- Somente o proprietário pode promover contas existentes a administradoras; o cadastro público nunca permite escolher o papel administrativo.
 - O histórico do worker é filtrado por usuário; contas comuns não conseguem consultar solicitações de outras contas.
+- As chaves são armazenadas como HMAC-SHA256, exibidas integralmente somente uma vez e podem ser revogadas antes do resgate.

@@ -351,12 +351,12 @@ function App() {
     if (authState !== "authenticated") return;
     void checkWorkerHealth(true);
     void refreshHistory(true);
-    const interval = window.setInterval(() => { void checkWorkerHealth(true); }, 30_000);
-    return () => window.clearInterval(interval);
     if (userRole === "admin") {
       void loadAccessKeys(true);
       if (isOwner) void loadManagedUsers(true);
     }
+    const interval = window.setInterval(() => { void checkWorkerHealth(true); }, 30_000);
+    return () => window.clearInterval(interval);
   }, [authState, userRole, isOwner]);
 
   useEffect(() => {
@@ -465,7 +465,7 @@ function App() {
       return;
     }
     if (!registerLicenseKey.trim()) {
-      setLoginError("Informe sua chave de ativação KeyAuth.");
+      setLoginError("Informe sua chave de acesso do IPTV Flow.");
       return;
     }
     setLoginSubmitting(true);

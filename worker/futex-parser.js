@@ -8,14 +8,52 @@ function lastMatch(text, patterns) {
   return result;
 }
 
+function cleanRecommendedApp(value) {
+  let candidate = value
+    .replace(/^[\s"'“”‘’:;,.!?–—-]+/u, "")
+    .replace(/[🎬📺📲]+$/u, "")
+    .replace(/^[oa]\s+(?=(?:[A-Z0-9]|[\p{L}])/u, "")
+    .trim();
+
+  candidate = candidate
+    .replace(/\s+(?:na|no|pela|através da|por meio da)\s+(?:app store|play store|loja(?: de aplicativos)?|seu aparelho|seu dispositivo|iphone|ipad).*$/i, "")
+    .replace(/\s+(?:e depois|para continuar|para assistir|para acessar).*$/i, "")
+    .replace(/[\s"'“”‘’:;,.!?–—-]+$/u, "")
+    .trim();
+
+  if (!candidate || candidate.length > 64) return undefined;
+  if (/^(?:pela\s+)?futex$|^(?:o\s+)?(?:aplicativo|app)(?:\s+indicado)?$|^(?:iphone|ipad|ios|apple)$/i.test(candidate)) return undefined;
+  if (/^(?:sim|não|nao|consegui|não consegui|nao consegui|já instalei|ja instalei|instalar|confirmar)$/i.test(candidate)) return undefined;
+  if (/^(?:indicado|recomendado)\s+(?:pela|por)\s+futex$/i.test(candidate)) return undefined;
+  return candidate;
+}
+
 export function extractRecommendedApp(text) {
-  const match = lastMatch(text, [
-    /aplicativo indicado(?: para você)?(?: é|:)?\s*(?:o\s+)?([^.!;\n]+)/gi,
-    /aplicativo recomendado(?: é|:)?\s*(?:o\s+)?([^.!;\n]+)/gi,
+  const patterns = [
+    /aplicativo indicado(?:\s+para\s+[^:,.!?;\n]+)?\s*(?:é|:|=)\s*(?:o\s+)?([^.!;\n]+)/gi,
+    /aplicativo recomendado(?:\s+para\s+[^:,.!?;\n]+)?\s*(?:é|:|=)\s*(?:o\s+)?([^.!;\n]+)/gi,
+    /(?:nome do aplicativo|nome do app)\s*(?:é|:|=)?\s*(?:o\s+)?([^.!;\n]+)/gi,
+    /(?:app|aplicativo)\s+(?:indicado|recomendado)\s*[:=]\s*(?:o\s+)?([^.!;\n]+)/gi,
+    /(?:recomendamos|recomendo|indicamos|indico)\s+(?:o\s+)?(?:aplicativo|app)\s+(?:chamado|denominado|de nome)?\s*[:\-]?\s*([^.!;\n]+)/gi,
+    /(?:recomendamos|recomendo|indicamos|indico)\s+(?:que você\s+)?(?:instale|baixe|use|utilize)\s+(?:o\s+)?(?:aplicativo|app)\s+([^.!;\n]+)/gi,
+    /(?:baixe|instale|procure|pesquise|utilize|use|abra)\s+(?:o\s+)?(?:aplicativo|app)\s+(.+?)\s+(?:na|no|pela)\s+(?:app store|play store|loja(?: de aplicativos)?|seu aparelho|seu dispositivo|iphone|ipad)/gi,
+    /(?:baixe|instale|procure|pesquise|utilize|use|abra)\s+(?:o\s+)?(.+?)\s+(?:na|no|pela)\s+(?:app store|play store|loja(?: de aplicativos)?|seu iphone|seu ipad)/gi,
+    /(?:instale|baixe|procure|pesquise|utilize|use)\s+(?:o\s+)?(?:aplicativo|app)\s+(.+?)\s+(?:no seu aparelho|no seu dispositivo|no iphone|no ipad|em seu aparelho|em seu iphone|em seu ipad)/gi,
+    /(?:para\s+(?:o\s+)?(?:iphone|ipad|ios)[^.!;\n]*?\b(?:instale|baixe|use|utilize)\s+(?:o\s+)?(?:aplicativo|app)?\s*)([^.!;\n]+)/gi,
     /instale o\s+([^.!;\n]+?)\s+(?:na sua tv|no seu aparelho)/gi,
     /app recomendado(?: é|:)?\s*(?:o\s+)?([^.!;\n]+)/gi,
-  ]);
-  return match?.[1]?.trim().replace(/[🎬📺📲]+$/u, "").trim() || undefined;
+  ];
+
+  const candidates = [];
+  for (const pattern of patterns) {
+    for (const match of text.matchAll(pattern)) {
+      const candidate = cleanRecommendedApp(match[1] || "");
+      if (candidate) candidates.push({ index: match.index ?? -1, candidate });
+    }
+  }
+
+  candidates.sort((a, b) => a.index - b.index);
+  return candidates.at(-1)?.candidate;
 }
 
 export function extractDuration(text) {

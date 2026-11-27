@@ -45,9 +45,21 @@ if (process.env.NODE_ENV === "production" && apiToken.length < 32) {
   throw new Error("Defina API_TOKEN com pelo menos 32 caracteres aleatórios antes de iniciar o worker em produção.");
 }
 
+function requestIdentity(req) {
+  return {
+    username: String(req.get("x-iptvflow-user") || "").trim().toLowerCase(),
+    role: req.get("x-iptvflow-role") === "admin" ? "admin" : "user",
+  };
+}
+
+function canAccessJob(req, job) {
+  const identity = requestIdentity(req);
+  return identity.role === "admin" || Boolean(identity.username && job?.ownerUsername === identity.username);
+}
+
 function safeJob(job) {
   if (!job) return job;
-  const { internalError, privateDataEncrypted, ...publicJob } = job;
+  const { internalError, privateDataEncrypted, ownerUsername, ...publicJob } = job;
   return publicJob;
 }
 
@@ -189,7 +201,8 @@ app.get("/api/health", (_req, res) => {
   });
 });
 
-app.get("/api/diagnostics/futex", async (_req, res) => {
+app.get("/api/diagnostics/futex", async (req, res) => {
+  if (requestIdentity(req).role !== "admin") return res.status(403).json({ message: "Apenas administradores podem executar diagnósticos." });
   try {
     const diagnostic = await inspectFutexPage();
     res.setHeader("Cache-Control", "no-store");
@@ -201,8 +214,11 @@ app.get("/api/diagnostics/futex", async (_req, res) => {
   }
 });
 
-app.get("/api/test-requests", (_req, res) => {
+app.get("/api/test-requests", (req, res) => {
+  const identity = requestIdentity(req);
+  if (!identity.username) return res.status(401).json({ message: "Sessão inválida." });
   const items = [...jobs.values()]
+    .filter((job) => identity.role === "admin" || job.ownerUsername === identity.username)
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
     .map(safeJob);
   res.setHeader("Cache-Control", "no-store");
@@ -216,6 +232,8 @@ app.post("/api/test-requests", async (req, res) => {
     });
   }
 
+  const identity = requestIdentity(req);
+  if (!identity.username) return res.status(401).json({ message: "Sessão inválida." });
   const manualChat = req.body?.manualChat === true;
   const { customerName, contact, device, brand } = req.body || {};
   const phoneDigits = String(contact || "").replace(/\D/g, "");
@@ -246,6 +264,7 @@ app.post("/api/test-requests", async (req, res) => {
   const id = crypto.randomUUID();
   const job = {
     id,
+    ownerUsername: identity.username,
     customerName: manualChat ? "Atendimento FUTEX" : customerName.trim().slice(0, 100),
     contact: manualChat ? "" : String(contact).trim().slice(0, 30),
     device: manualChat ? "A definir no atendimento" : device.trim().slice(0, 60),
@@ -287,7 +306,7 @@ app.post("/api/test-requests", async (req, res) => {
 
 app.get("/api/test-requests/:id", async (req, res) => {
   let job = jobs.get(req.params.id);
-  if (!job) return res.status(404).json({ message: "Solicitação não encontrada." });
+  if (!job || !canAccessJob(req, job)) return res.status(404).json({ message: "Solicitação não encontrada." });
 
   const session = sessions.get(req.params.id);
   if (session && job.manualChat && !busySessions.has(req.params.id) && job.status !== "completed") {
@@ -334,7 +353,7 @@ app.get("/api/test-requests/:id", async (req, res) => {
 
 app.post("/api/test-requests/:id/chat", (req, res) => {
   const job = jobs.get(req.params.id);
-  if (!job) return res.status(404).json({ message: "Solicitação não encontrada." });
+  if (!job || !canAccessJob(req, job)) return res.status(404).json({ message: "Solicitação não encontrada." });
   if (!job.manualChat) return res.status(409).json({ message: "Esta solicitação não usa o atendimento manual." });
   const session = sessions.get(req.params.id);
   if (!session) return res.status(409).json({ message: "A sessão da FUTEX não está mais ativa. Inicie um novo atendimento." });
@@ -382,7 +401,7 @@ app.post("/api/test-requests/:id/chat", (req, res) => {
 
 app.post("/api/test-requests/:id/app-confirmation", (req, res) => {
   const job = jobs.get(req.params.id);
-  if (!job) return res.status(404).json({ message: "Solicitação não encontrada." });
+  if (!job || !canAccessJob(req, job)) return res.status(404).json({ message: "Solicitação não encontrada." });
   const session = sessions.get(req.params.id);
   if (!session) return res.status(409).json({ message: "A sessão de atendimento não está mais ativa. Inicie uma nova solicitação." });
   if (busySessions.has(req.params.id)) {

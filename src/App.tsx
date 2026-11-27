@@ -478,7 +478,7 @@ function App() {
         body: JSON.stringify({
           username: registerUsername.trim(),
           password: registerPassword,
-          licenseKey: registerLicenseKey.trim(),
+          accessKey: registerLicenseKey.trim(),
         }),
         cache: "no-store",
       });
@@ -999,7 +999,7 @@ function App() {
                 </label>
                 <label className="auth-field">
                   <span>Senha de acesso</span>
-                  <input type="password" value={loginPassword} onChange={(event) => setLoginPassword(event.target.value)} placeholder="Digite sua senha" autoComplete="current-password" maxLength={256} required />
+                  <input type="password" value={loginPassword} onChange={(event) => setLoginPassword(event.target.value)} placeholder="Digite sua senha" autoComplete="current-password" maxLength={128} required />
                 </label>
                 {loginError && <div className="auth-error" role="alert"><X size={15} /> {loginError}</div>}
                 <button className="auth-submit" type="submit" disabled={loginSubmitting || !loginUsername.trim() || !loginPassword}>
@@ -1428,7 +1428,7 @@ function App() {
         </div>
       </main>
 
-      <nav className="mobile-bottom-nav">
+      <nav className={"mobile-bottom-nav" + (userRole === "admin" ? " mobile-bottom-nav-admin" : "")}>
         {navigation.map((item) => { const Icon = item.icon; return <button key={item.id} className={page === item.id ? "active" : ""} onClick={() => navigate(item.id)}><Icon size={19} /><span>{item.id === "overview" ? "Início" : item.id === "new" ? "Novo" : item.id === "history" ? "Histórico" : item.id === "access" ? "Chaves" : "Ajustes"}</span></button>; })}
       </nav>
 

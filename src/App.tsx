@@ -672,7 +672,7 @@ function App() {
                     {flowStage === "install" && flowRequest && (
                       <>
                         <div className="flow-state-heading"><span className="step-number">04</span><div><h3>Aplicativo recomendado</h3><p>Esta é a etapa de instalação mostrada pela FUTEX.</p></div><StatusPill status="awaiting_app" /></div>
-                        <div className="app-recommendation-card"><span className="app-recommendation-icon"><Monitor size={24} /></span><div><small>APLICATIVO INDICADO</small><strong>{flowRequest.recommendedApp}</strong><p>Para {flowRequest.device} {flowRequest.brand}.</p></div></div>
+                        <div className="app-recommendation-card"><span className="app-recommendation-icon"><Monitor size={24} /></span><div><small>APLICATIVO INDICADO</small><strong>{flowRequest.recommendedApp}</strong><p>Para {flowRequest.device}{flowRequest.device === "iPhone / iPad" ? "" : " " + flowRequest.brand}.</p></div></div>
                         <p className="detail-message">Instale o aplicativo recomendado no aparelho. Você não precisa abrir o site FUTEX: continue o atendimento por aqui.</p>
                         {flowRequest.message && <p className="detail-message">{flowRequest.message}</p>}
                         <div className="flow-question"><strong>Conseguiu instalar o {flowRequest.recommendedApp}?</strong><p>Responda aqui no IPTV Flow. A automação continuará no servidor, sem abrir o site FUTEX no seu celular.</p></div>

@@ -2118,3 +2118,37 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
     object-position: center;
   }
 }
+
+
+/* Password policy feedback and KeyAuth account activation */
+.auth-mode-switch {
+  display: block; width: 100%; margin-top: 18px; padding: 8px;
+  color: #8994ae; border: 0; background: transparent; font-size: 10px; cursor: pointer;
+}
+.auth-mode-switch strong { color: #b7a1ff; font-weight: 800; }
+.auth-mode-switch:hover strong { color: #d3c4ff; }
+.password-strength {
+  margin-top: 12px; padding: 13px; border: 1px solid rgba(142, 123, 205, .18);
+  border-radius: 12px; background: rgba(7, 11, 23, .62);
+}
+.password-strength-top { display: flex; align-items: center; justify-content: space-between; color: #8792ad; font-size: 9px; }
+.password-strength-top strong { color: #ff9ca9; font-size: 10px; }
+.strength-medium .password-strength-top strong { color: #e8bd70; }
+.strength-strong .password-strength-top strong { color: #58d5aa; }
+.password-strength-track { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; margin-top: 9px; }
+.password-strength-track i { height: 4px; border-radius: 99px; background: rgba(132, 146, 175, .16); }
+.strength-weak .password-strength-track i:first-child { background: #ee7186; }
+.strength-medium .password-strength-track i:nth-child(-n+2) { background: #e8bd70; }
+.strength-strong .password-strength-track i { background: #58d5aa; }
+.password-requirements { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px 10px; margin-top: 11px; }
+.password-requirements span { display: flex; align-items: center; gap: 5px; color: #77839e; font-size: 8px; }
+.password-requirements svg { color: #56617b; }
+.password-requirements .met { color: #8bd9bb; }
+.password-requirements .met svg { color: #58d5aa; }
+.password-match { margin-top: 8px; font-size: 9px; }
+.password-match.matched { color: #69d5ad; }
+.password-match.unmatched { color: #f08c9d; }
+@media (max-width: 480px) {
+  .password-strength { padding: 11px; }
+  .password-requirements { gap: 7px; }
+}

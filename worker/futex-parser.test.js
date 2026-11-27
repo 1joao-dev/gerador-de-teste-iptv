@@ -64,3 +64,23 @@ test("não considera o texto do atendimento como credenciais antes da etapa fina
   assert.deepEqual(extractAccessDetails("Qual é o seu nome?\nJoão\nQual seu celular?"), []);
   assert.equal(extractResult("Qual é o seu nome?"), undefined);
 });
+
+
+test("extrai o aplicativo recomendado em respostas específicas para iPhone e iPad", () => {
+  assert.equal(
+    extractRecommendedApp("Para iPhone, recomendamos o aplicativo IPTV Smarters Pro na App Store. Conseguiu instalar o aplicativo?"),
+    "IPTV Smarters Pro",
+  );
+  assert.equal(
+    extractRecommendedApp("Aplicativo indicado para iPhone: IBO Player. Conseguiu instalar?"),
+    "IBO Player",
+  );
+  assert.equal(
+    extractRecommendedApp("Baixe o app GSE Smart IPTV na App Store. Você conseguiu instalar?"),
+    "GSE Smart IPTV",
+  );
+});
+
+test("não transforma uma indicação genérica da FUTEX em nome de aplicativo", () => {
+  assert.equal(extractRecommendedApp("Aplicativo indicado pela FUTEX. Conseguiu instalar o aplicativo?"), undefined);
+});

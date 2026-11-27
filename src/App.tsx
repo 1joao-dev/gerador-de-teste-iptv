@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type ChangeEvent, type FormEvent } from "react";
 import {
   Activity,
   ArrowRight,
   ArrowUpRight,
   Bell,
+  Camera,
   Check,
   CheckCircle2,
   ChevronDown,
@@ -27,6 +28,7 @@ import {
   Menu,
   Monitor,
   MoreHorizontal,
+  Palette,
   Plus,
   RadioTower,
   RefreshCw,
@@ -34,7 +36,9 @@ import {
   Settings2,
   ShieldCheck,
   Sparkles,
+  Trash2,
   Tv,
+  UserRound,
   X,
   Zap,
 } from "lucide-react";
@@ -44,6 +48,31 @@ type Page = "overview" | "new" | "history" | "settings";
 type RequestStatus = "draft" | "queued" | "running" | "awaiting_app" | "needs_human" | "completed" | "failed";
 
 type AccessDetail = { label: string; value: string };
+
+type AdminProfile = {
+  displayName: string;
+  title: string;
+  bio: string;
+  accent: string;
+  avatarDataUrl: string;
+};
+
+const PROFILE_STORAGE_KEY = "iptvflow.admin-profile.v1";
+const DEFAULT_ADMIN_PROFILE: AdminProfile = {
+  displayName: "João | Dev",
+  title: "Proprietário",
+  bio: "Criador e administrador do IPTV Flow.",
+  accent: "#8b6bfa",
+  avatarDataUrl: "",
+};
+const PROFILE_ACCENTS = [
+  { value: "#8b6bfa", label: "Violeta" },
+  { value: "#24b9d6", label: "Ciano" },
+  { value: "#3d83f6", label: "Azul" },
+  { value: "#d45be8", label: "Magenta" },
+  { value: "#32b889", label: "Verde" },
+  { value: "#e5a94f", label: "Âmbar" },
+];
 
 type TestRequest = {
   id: string;
@@ -98,6 +127,52 @@ function FlowMark({ size = 32 }: { size?: number }) {
       <path d="m19 16.2 12.4 7.1c.7.4.7 1.1 0 1.5L19 31.9c-.8.5-1.7 0-1.7-.9V17.1c0-.9.9-1.4 1.7-.9Z" fill="#120D20" />
       <path d="M12 7.4c-2.5 1.2-3.7 3.2-3.7 6v21.2c0 3.1 1.6 5.2 4.1 6" stroke="#E8D9FF" strokeOpacity=".35" strokeWidth="1.2" strokeLinecap="round" />
     </svg>
+  );
+}
+
+function getProfileInitials(name: string) {
+  const parts = name.split(/[|\s]+/).filter(Boolean);
+  return parts.slice(0, 2).map((part) => Array.from(part)[0]?.toUpperCase() || "").join("") || "JD";
+}
+
+function readAdminProfile(): AdminProfile {
+  try {
+    const raw = window.localStorage.getItem(PROFILE_STORAGE_KEY);
+    if (!raw) return DEFAULT_ADMIN_PROFILE;
+    const saved = JSON.parse(raw) as Partial<AdminProfile>;
+    const accent = PROFILE_ACCENTS.some((item) => item.value === saved.accent)
+      ? saved.accent as string
+      : DEFAULT_ADMIN_PROFILE.accent;
+    const avatarDataUrl = typeof saved.avatarDataUrl === "string"
+      && saved.avatarDataUrl.length <= 180_000
+      && /^data:image\/jpeg;base64,/.test(saved.avatarDataUrl)
+      ? saved.avatarDataUrl
+      : "";
+    return {
+      displayName: typeof saved.displayName === "string" ? saved.displayName.slice(0, 40) : DEFAULT_ADMIN_PROFILE.displayName,
+      title: typeof saved.title === "string" ? saved.title.slice(0, 40) : DEFAULT_ADMIN_PROFILE.title,
+      bio: typeof saved.bio === "string" ? saved.bio.slice(0, 140) : DEFAULT_ADMIN_PROFILE.bio,
+      accent,
+      avatarDataUrl,
+    };
+  } catch {
+    return DEFAULT_ADMIN_PROFILE;
+  }
+}
+
+function ProfileAvatar({ profile, className }: { profile: AdminProfile; className: string }) {
+  return (
+    <div
+      className={className}
+      style={{
+        background: profile.avatarDataUrl ? undefined : `linear-gradient(145deg, ${profile.accent}, #17182a)`,
+        borderColor: profile.accent,
+      }}
+      role="img"
+      aria-label={profile.displayName}
+    >
+      {profile.avatarDataUrl ? <img src={profile.avatarDataUrl} alt="" /> : getProfileInitials(profile.displayName)}
+    </div>
   );
 }
 
@@ -163,8 +238,10 @@ function App() {
   const [page, setPage] = useState<Page>("overview");
   const [requests, setRequests] = useState<TestRequest[]>([]);
   const [authState, setAuthState] = useState<"checking" | "authenticated" | "unauthenticated">("checking");
-  const [adminUsername, setAdminUsername] = useState("admin");
-  const [loginUsername, setLoginUsername] = useState("admin");
+  const [adminUsername, setAdminUsername] = useState("1joaodev");
+  const [loginUsername, setLoginUsername] = useState("1joaodev");
+  const [profile, setProfile] = useState<AdminProfile>(() => readAdminProfile());
+  const [profileDraft, setProfileDraft] = useState<AdminProfile>(() => readAdminProfile());
   const [loginPassword, setLoginPassword] = useState("");
   const [loginError, setLoginError] = useState("");
   const [loginSubmitting, setLoginSubmitting] = useState(false);
@@ -301,6 +378,77 @@ function App() {
       setLoginPassword("");
       setLoginError("");
       setAuthState("unauthenticated");
+    }
+  }
+
+  function handleAvatarUpload(event: ChangeEvent<HTMLInputElement>) {
+    const input = event.currentTarget;
+    const file = input.files?.[0];
+    input.value = "";
+    if (!file) return;
+    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
+      setToast("Escolha uma imagem JPG, PNG ou WebP.");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setToast("A foto deve ter no máximo 5 MB.");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const image = new Image();
+      image.onload = () => {
+        const canvas = document.createElement("canvas");
+        const scale = Math.min(1, 320 / Math.max(image.width, image.height));
+        canvas.width = Math.max(1, Math.round(image.width * scale));
+        canvas.height = Math.max(1, Math.round(image.height * scale));
+        const context = canvas.getContext("2d");
+        if (!context) {
+          setToast("Não foi possível processar esta imagem.");
+          return;
+        }
+        context.drawImage(image, 0, 0, canvas.width, canvas.height);
+        setProfileDraft((current) => ({ ...current, avatarDataUrl: canvas.toDataURL("image/jpeg", 0.82) }));
+        setToast("Foto carregada. Salve o perfil para aplicar.");
+      };
+      image.onerror = () => setToast("Não foi possível abrir esta imagem.");
+      image.src = String(reader.result || "");
+    };
+    reader.onerror = () => setToast("Falha ao ler a imagem selecionada.");
+    reader.readAsDataURL(file);
+  }
+
+  function saveProfile(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const nextProfile: AdminProfile = {
+      ...profileDraft,
+      displayName: profileDraft.displayName.trim().slice(0, 40),
+      title: profileDraft.title.trim().slice(0, 40) || "Administrador",
+      bio: profileDraft.bio.trim().slice(0, 140),
+    };
+    if (nextProfile.displayName.length < 2) {
+      setToast("Informe um nome de exibição com pelo menos 2 caracteres.");
+      return;
+    }
+    try {
+      window.localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(nextProfile));
+      setProfile(nextProfile);
+      setProfileDraft(nextProfile);
+      setToast("Perfil atualizado com sucesso.");
+    } catch {
+      setToast("Não foi possível salvar. Libere espaço no armazenamento deste navegador e tente novamente.");
+    }
+  }
+
+  function resetProfile() {
+    try {
+      window.localStorage.removeItem(PROFILE_STORAGE_KEY);
+      setProfile(DEFAULT_ADMIN_PROFILE);
+      setProfileDraft(DEFAULT_ADMIN_PROFILE);
+      setToast("Perfil restaurado para o padrão.");
+    } catch {
+      setToast("Não foi possível restaurar o perfil neste navegador.");
     }
   }
 
@@ -662,11 +810,11 @@ function App() {
             <p>Consulte o guia de configuração da automação.</p>
             <button onClick={() => setToast("O guia será disponibilizado quando a integração estiver configurada.")}>Acessar guia <ArrowUpRight size={13} /></button>
           </div>
-          <div className="profile-row">
-            <div className="profile-avatar">AD</div>
-            <div className="profile-copy"><strong>{adminUsername}</strong><small>Administrador autenticado</small></div>
+          <button type="button" className="profile-row" onClick={() => navigate("settings")} aria-label="Abrir meu perfil">
+            <ProfileAvatar profile={profile} className="profile-avatar" />
+            <div className="profile-copy"><strong>{profile.displayName}</strong><small>{profile.title}</small></div>
             <MoreHorizontal size={18} />
-          </div>
+          </button>
         </div>
       </aside>
 
@@ -688,7 +836,7 @@ function App() {
             <button className="icon-button auth-logout-button" onClick={() => void handleLogout()} aria-label="Sair da conta" title="Sair">
               <LogOut size={17} />
             </button>
-            <div className="topbar-avatar">AD</div>
+            <button type="button" className="topbar-profile-button" onClick={() => navigate("settings")} aria-label="Abrir meu perfil" title={profile.displayName}><ProfileAvatar profile={profile} className="topbar-avatar" /></button>
           </div>
         </header>
 
@@ -875,6 +1023,58 @@ function App() {
             <section className="page-section">
               <div className="page-heading"><div><div className="eyebrow"><Settings2 size={13} /> PREFERÊNCIAS</div><h1>Configurações</h1><p>Gerencie as conexões e os parâmetros do aplicativo.</p></div></div>
               <div className="settings-layout">
+                <section className="panel settings-panel profile-settings-panel">
+                  <div className="profile-editor-header">
+                    <div className="profile-editor-identity">
+                      <ProfileAvatar profile={profileDraft} className="profile-large-avatar" />
+                      <div className="profile-editor-copy">
+                        <span className="profile-editor-kicker"><UserRound size={12} /> PERFIL DO PROPRIETÁRIO</span>
+                        <h3>{profileDraft.displayName || "Seu nome"}</h3>
+                        <p>{profileDraft.title || "Cargo ou identificação"} · @{adminUsername}</p>
+                      </div>
+                    </div>
+                    <label className="profile-upload-button">
+                      <Camera size={14} /> Alterar foto
+                      <input type="file" accept="image/jpeg,image/png,image/webp" onChange={handleAvatarUpload} aria-label="Escolher foto de perfil" />
+                    </label>
+                  </div>
+                  <form className="profile-editor-form" onSubmit={saveProfile}>
+                    <div className="profile-form-grid">
+                      <label className="profile-field">
+                        <span>Nome de exibição</span>
+                        <input type="text" value={profileDraft.displayName} onChange={(event) => setProfileDraft((current) => ({ ...current, displayName: event.target.value }))} placeholder="João | Dev" maxLength={40} minLength={2} required />
+                      </label>
+                      <label className="profile-field">
+                        <span>Função / cargo</span>
+                        <input type="text" value={profileDraft.title} onChange={(event) => setProfileDraft((current) => ({ ...current, title: event.target.value }))} placeholder="Proprietário" maxLength={40} />
+                      </label>
+                      <label className="profile-field profile-field-wide">
+                        <span>Sobre você</span>
+                        <textarea value={profileDraft.bio} onChange={(event) => setProfileDraft((current) => ({ ...current, bio: event.target.value }))} placeholder="Conte um pouco sobre você..." maxLength={140} rows={3} />
+                      </label>
+                      <div className="profile-field profile-field-wide">
+                        <span><Palette size={13} /> Cor de destaque</span>
+                        <div className="profile-color-options" role="group" aria-label="Escolher cor do perfil">
+                          {PROFILE_ACCENTS.map((accent) => (
+                            <button key={accent.value} type="button" className="profile-color-swatch" style={{ backgroundColor: accent.value }} aria-label={accent.label} aria-pressed={profileDraft.accent === accent.value} title={accent.label} onClick={() => setProfileDraft((current) => ({ ...current, accent: accent.value }))}>
+                              {profileDraft.accent === accent.value && <Check size={14} />}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="profile-meta-row">
+                      <div><span>Usuário de acesso</span><strong>{adminUsername}</strong><small>Identificador usado no login. Não é alterado pelo nome de exibição.</small></div>
+                      <div><span>Nível de acesso</span><strong>Proprietário · Administrador</strong><small>Acesso administrativo principal do IPTV Flow.</small></div>
+                    </div>
+                    <div className="profile-editor-actions">
+                      <button className="secondary-button" type="button" onClick={() => setProfileDraft(profile)}>Descartar alterações</button>
+                      {profileDraft.avatarDataUrl && <button className="secondary-button profile-remove-photo" type="button" onClick={() => setProfileDraft((current) => ({ ...current, avatarDataUrl: "" }))}><Trash2 size={14} /> Remover foto</button>}
+                      <button className="primary-button" type="submit"><Check size={15} /> Salvar perfil</button>
+                    </div>
+                  </form>
+                  <div className="profile-storage-note"><ShieldCheck size={14} /><span>As personalizações ficam salvas neste navegador e neste dispositivo. A senha e o usuário de acesso continuam protegidos no servidor.</span></div>
+                </section>
                 <section className="panel settings-panel"><div className="settings-heading"><span className="settings-icon"><RadioTower size={19} /></span><div><h3>Integração de automação</h3><p>Conexão entre o aplicativo e o serviço que processa as solicitações.</p></div><span className={"config-value " + (automationReady ? "configured" : "pending")}>{workerHealth === "checking" ? "Verificando" : automationReady ? "Ativo" : workerHealth === "online" ? "Pausado" : "Offline"}</span></div><div className="settings-row"><div><strong>Proxy seguro da aplicação</strong><small>A chave do worker permanece no servidor Vercel.</small></div><span className="config-value configured">Configurado</span></div><div className="settings-row"><div><strong>Autenticação administrativa</strong><small>Acesso por sessão segura, sem armazenar senha no navegador.</small></div><span className="config-value configured">Protegida</span></div><div className="settings-row"><div><strong>Worker de automação</strong><small>Processador Playwright executado em servidor persistente.</small></div><span className={"config-value " + (workerHealth === "online" ? "configured" : "pending")}>{workerHealth === "checking" ? "Verificando" : workerHealth === "online" ? "Online" : "Offline"}</span></div><div className="settings-row"><div><strong>Conexão FUTEX</strong><small>O worker usa o atendimento original da FUTEX e devolve os dados ao IPTV Flow.</small></div><span className={"config-value " + (automationReady ? "configured" : "pending")}>{workerAutomationEnabled ? "Ativa" : "Desativada"}</span></div><div className="settings-row"><div><strong>Formulário próprio + FUTEX</strong><small>O usuário preenche o formulário próprio; a FUTEX processa o teste em segundo plano.</small></div><span className="config-value configured">Integração</span></div>
 <div className="settings-callout"><LockKeyhole size={16} /><p>A sessão administrativa usa cookie HttpOnly, Secure e SameSite=Strict. A senha é validada exclusivamente no servidor; o token interno do worker nunca é enviado ao navegador.</p></div><button className="secondary-button" type="button" onClick={() => void checkWorkerHealth()}><RefreshCw size={14} /> Verificar conexão</button><button className="secondary-button" type="button" onClick={() => void runFutexDiagnostic()} disabled={diagnosingFutex || workerHealth !== "online"}>{diagnosingFutex ? <LoaderCircle className="spin" size={14} /> : <Activity size={14} />} {diagnosingFutex ? "Analisando site..." : "Diagnosticar FUTEX"}</button>{futexDiagnostic && <><pre className="diagnostic-output">{futexDiagnostic}</pre><button className="text-button" type="button" onClick={() => void copyValue("Diagnóstico", futexDiagnostic)}><Copy size={14} /> Copiar diagnóstico</button></>}</section>
                 <section className="panel settings-panel"><div className="settings-heading"><span className="settings-icon"><Gauge size={19} /></span><div><h3>Ambiente do aplicativo</h3><p>Informações de execução desta versão.</p></div></div><div className="settings-row"><div><strong>Interface web</strong><small>Aplicação React responsiva.</small></div><span className="config-value configured">Operacional</span></div><div className="settings-row"><div><strong>Armazenamento local</strong><small>Rascunhos salvos neste navegador.</small></div><span className="config-value configured">Ativo</span></div><div className="settings-row"><div><strong>Sincronização entre dispositivos</strong><small>Histórico persistido no volume do servidor worker.</small></div><span className="config-value configured">Preparada</span></div></section>

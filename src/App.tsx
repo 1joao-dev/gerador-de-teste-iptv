@@ -484,7 +484,7 @@ function App() {
   ];
 
   return (
-    <div className="app-shell">
+    <div className="app-shell cyber-shell" data-page={page} data-worker-state={workerHealth}>
       <aside className={"sidebar " + (mobileMenuOpen ? "sidebar-open" : "")}>
         <div className="brand-lockup">
           <div className="brand-mark"><FlowMark size={31} /></div>
@@ -539,7 +539,7 @@ function App() {
             <div className="breadcrumb"><span>Workspace</span><ChevronRight size={14} /><strong>{navigation.find((item) => item.id === page)?.label}</strong></div>
           </div>
           <div className="topbar-actions">
-            <div className={"connection-indicator " + (automationReady ? "connected" : "disconnected")}>
+            <div className={"connection-indicator " + (automationReady ? "connected" : "disconnected")} role="status" aria-live="polite">
               <i />{workerHealth === "checking" ? "Verificando worker" : workerHealth === "offline" ? "Worker offline" : automationReady ? "Automação ativa" : "Automação pausada"}
             </div>
             <button className="icon-button notification-button" onClick={() => setToast("Você está em dia. Nenhuma notificação nova.")} aria-label="Notificações">

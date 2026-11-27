@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 
-const PRIVATE_FIELDS = ["customerName", "contact", "accessDetails", "username", "password", "code", "chatMessages"];
+const PRIVATE_FIELDS = ["customerName", "contact", "ownerUsername", "accessDetails", "username", "password", "code", "chatMessages"];
 
 export function createDataEncryptionKey(rawKey, production = false) {
   const value = String(rawKey || "").trim();

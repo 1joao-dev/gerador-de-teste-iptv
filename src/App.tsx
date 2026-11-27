@@ -24,6 +24,8 @@ import {
   LifeBuoy,
   LoaderCircle,
   LockKeyhole,
+  KeyRound,
+  Users,
   LogOut,
   Menu,
   Monitor,
@@ -44,7 +46,7 @@ import {
 } from "lucide-react";
 import { API_BASE_URL } from "./config";
 
-type Page = "overview" | "new" | "history" | "settings";
+type Page = "overview" | "new" | "history" | "access" | "settings";
 type RequestStatus = "draft" | "queued" | "running" | "awaiting_app" | "needs_human" | "completed" | "failed";
 
 type AccessDetail = { label: string; value: string };
@@ -55,6 +57,27 @@ type AdminProfile = {
   bio: string;
   accent: string;
   avatarDataUrl: string;
+};
+
+type AccessKeyItem = {
+  id: string;
+  prefix: string;
+  label: string;
+  createdBy: string;
+  createdAt: string;
+  expiresAt: string | null;
+  redeemedAt: string | null;
+  redeemedBy: string | null;
+  revokedAt: string | null;
+  status: "active" | "used" | "expired" | "revoked";
+};
+
+type ManagedUserItem = {
+  username: string;
+  role: "admin" | "user";
+  status: "active" | "disabled";
+  createdAt: string;
+  lastLoginAt: string | null;
 };
 
 const PROFILE_STORAGE_KEY = "iptvflow.admin-profile.v1";
@@ -262,6 +285,16 @@ function App() {
   const [authState, setAuthState] = useState<"checking" | "authenticated" | "unauthenticated">("checking");
   const [adminUsername, setAdminUsername] = useState("1joaodev");
   const [userRole, setUserRole] = useState<"admin" | "user">("admin");
+  const [isOwner, setIsOwner] = useState(false);
+  const [accessKeys, setAccessKeys] = useState<AccessKeyItem[]>([]);
+  const [accessKeysLoading, setAccessKeysLoading] = useState(false);
+  const [keyLabel, setKeyLabel] = useState("");
+  const [keyExpiry, setKeyExpiry] = useState("30");
+  const [keySubmitting, setKeySubmitting] = useState(false);
+  const [generatedKey, setGeneratedKey] = useState("");
+  const [managedUsers, setManagedUsers] = useState<ManagedUserItem[]>([]);
+  const [managedUsersLoading, setManagedUsersLoading] = useState(false);
+  const [userActionLoading, setUserActionLoading] = useState("");
   const [authMode, setAuthMode] = useState<"login" | "register">("login");
   const [loginUsername, setLoginUsername] = useState("1joaodev");
   const [profile, setProfile] = useState<AdminProfile>(() => readAdminProfile());
@@ -298,8 +331,10 @@ function App() {
       .then((data) => {
         if (cancelled) return;
         const username = data.user?.username || "admin";
-        const role = data.user?.role === "admin" ? "admin" : "user";
+        const isOwnerAccount = data.user?.role === "owner";
+        const role = data.user?.role === "user" ? "user" : "admin";
         setAdminUsername(username);
+        setIsOwner(isOwnerAccount);
         setUserRole(role);
         const savedProfile = readAdminProfile(username, role);
         setProfile(savedProfile);
@@ -318,7 +353,11 @@ function App() {
     void refreshHistory(true);
     const interval = window.setInterval(() => { void checkWorkerHealth(true); }, 30_000);
     return () => window.clearInterval(interval);
-  }, [authState]);
+    if (userRole === "admin") {
+      void loadAccessKeys(true);
+      if (isOwner) void loadManagedUsers(true);
+    }
+  }, [authState, userRole, isOwner]);
 
   useEffect(() => {
     if (!toast) return;
@@ -347,7 +386,15 @@ function App() {
   }, [requests, searchTerm]);
 
   function navigate(nextPage: Page) {
+    if (nextPage === "access" && userRole !== "admin") {
+      setToast("Esta área é exclusiva para administradores.");
+      return;
+    }
     if (nextPage === "new") { setFlowStage("form"); setFlowRequest(null); }
+    if (nextPage === "access") {
+      void loadAccessKeys(true);
+      if (isOwner) void loadManagedUsers(true);
+    }
     setPage(nextPage);
     setMobileMenuOpen(false);
     setSelectedRequest(null);
@@ -388,8 +435,10 @@ function App() {
       const result = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(result.message || "Não foi possível autenticar.");
       const username = result.user?.username || loginUsername.trim() || "admin";
-      const role = result.user?.role === "admin" ? "admin" : "user";
+      const isOwnerAccount = result.user?.role === "owner";
+      const role = result.user?.role === "user" ? "user" : "admin";
       setAdminUsername(username);
+      setIsOwner(isOwnerAccount);
       setUserRole(role);
       const savedProfile = readAdminProfile(username, role);
       setProfile(savedProfile);
@@ -436,8 +485,9 @@ function App() {
       const result = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(result.message || "Não foi possível criar a conta.");
       const username = result.user?.username || registerUsername.trim().toLowerCase();
-      const role = result.user?.role === "admin" ? "admin" : "user";
+      const role = "user";
       setAdminUsername(username);
+      setIsOwner(false);
       setUserRole(role);
       const savedProfile = readAdminProfile(username, role);
       setProfile(savedProfile);
@@ -472,6 +522,10 @@ function App() {
       setLoginError("");
       setAuthMode("login");
       setUserRole("admin");
+      setIsOwner(false);
+      setAccessKeys([]);
+      setManagedUsers([]);
+      setGeneratedKey("");
       setAuthState("unauthenticated");
     }
   }
@@ -747,6 +801,116 @@ function App() {
     }
   }
 
+  async function loadAccessKeys(silent = false) {
+    setAccessKeysLoading(true);
+    try {
+      const response = await fetch("/api/auth/keys", { credentials: "same-origin", cache: "no-store" });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.message || "Não foi possível carregar as chaves.");
+      setAccessKeys(Array.isArray(data.items) ? data.items : []);
+    } catch (error) {
+      if (!silent) setToast(error instanceof Error ? error.message : "Falha ao carregar as chaves.");
+    } finally {
+      setAccessKeysLoading(false);
+    }
+  }
+
+  async function loadManagedUsers(silent = false) {
+    if (!isOwner) return;
+    setManagedUsersLoading(true);
+    try {
+      const response = await fetch("/api/auth/users", { credentials: "same-origin", cache: "no-store" });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.message || "Não foi possível carregar os usuários.");
+      setManagedUsers(Array.isArray(data.items) ? data.items : []);
+    } catch (error) {
+      if (!silent) setToast(error instanceof Error ? error.message : "Falha ao carregar os usuários.");
+    } finally {
+      setManagedUsersLoading(false);
+    }
+  }
+
+  async function generateAccessKey(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (keySubmitting) return;
+    setKeySubmitting(true);
+    setGeneratedKey("");
+    try {
+      const response = await fetch("/api/auth/keys", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          label: keyLabel.trim(),
+          expiresInDays: keyExpiry === "never" ? null : Number(keyExpiry),
+        }),
+        cache: "no-store",
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.message || "Não foi possível gerar a chave.");
+      setGeneratedKey(result.key || "");
+      setKeyLabel("");
+      await loadAccessKeys(true);
+      setToast("Chave criada. Copie e guarde o código: ele não será exibido novamente.");
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : "Falha ao gerar a chave.");
+    } finally {
+      setKeySubmitting(false);
+    }
+  }
+
+  async function copyGeneratedKey() {
+    if (!generatedKey) return;
+    try {
+      await navigator.clipboard.writeText(generatedKey);
+      setToast("Chave copiada.");
+    } catch {
+      setToast("Não foi possível copiar a chave neste dispositivo.");
+    }
+  }
+
+  async function revokeAccessKey(id: string) {
+    if (!window.confirm("Revogar esta chave? Ela não poderá mais ser utilizada para criar uma conta.")) return;
+    try {
+      const response = await fetch("/api/auth/keys/revoke", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id }),
+        cache: "no-store",
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.message || "Não foi possível revogar a chave.");
+      await loadAccessKeys(true);
+      setToast("Chave revogada.");
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : "Falha ao revogar a chave.");
+    }
+  }
+
+  async function changeUserRole(username: string, role: "admin" | "user") {
+    const action = role === "admin" ? "promover para administrador" : "remover as permissões administrativas de";
+    if (!window.confirm("Deseja " + action + " @" + username + "?")) return;
+    setUserActionLoading(username);
+    try {
+      const response = await fetch("/api/auth/users", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, role }),
+        cache: "no-store",
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.message || "Não foi possível alterar o acesso.");
+      await loadManagedUsers(true);
+      setToast(role === "admin" ? "Administrador autorizado." : "Permissões administrativas removidas.");
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : "Falha ao alterar o acesso.");
+    } finally {
+      setUserActionLoading("");
+    }
+  }
+
   function resumeRequest(request: TestRequest) {
     setFlowRequest(request);
     setFlowStage(hasTestResult(request) ? "result" : request.status === "awaiting_app" ? "install" : "waiting");
@@ -777,6 +941,7 @@ function App() {
     { id: "overview" as const, label: "Visão geral", icon: LayoutDashboard },
     { id: "new" as const, label: "Novo teste", icon: Plus },
     { id: "history" as const, label: "Histórico", icon: History },
+    ...(userRole === "admin" ? [{ id: "access" as const, label: "Chaves de acesso", icon: KeyRound }] : []),
     { id: "settings" as const, label: "Configurações", icon: Settings2 },
   ];
   const registerPasswordPolicy = getPasswordPolicy(registerPassword);
@@ -809,10 +974,10 @@ function App() {
             <div className="auth-intro-copy">
               <div className="auth-eyebrow"><ShieldCheck size={14} /> CENTRAL DE ACESSO</div>
               <h1>Seu acesso.<br /><em>Seu IPTV Flow.</em></h1>
-              <p>Entre com sua conta ou ative seu acesso usando uma licença KeyAuth. Cada perfil recebe permissões próprias.</p>
+              <p>Entre com sua conta ou ative seu acesso usando uma chave interna do IPTV Flow. Cada perfil recebe permissões próprias.</p>
             </div>
             <div className="auth-feature-list">
-              <div><span><LockKeyhole size={16} /></span><div><strong>Acesso controlado</strong><small>Conta ativada por uma licença KeyAuth válida.</small></div></div>
+              <div><span><LockKeyhole size={16} /></span><div><strong>Acesso controlado</strong><small>Cadastro liberado por uma chave de uso único.</small></div></div>
               <div><span><ShieldCheck size={16} /></span><div><strong>Sessão protegida</strong><small>Cookie seguro, sem senha salva no dispositivo.</small></div></div>
               <div><span><Activity size={16} /></span><div><strong>Operação isolada</strong><small>As chaves internas permanecem no servidor.</small></div></div>
             </div>
@@ -841,7 +1006,7 @@ function App() {
                   {loginSubmitting ? <LoaderCircle className="spin" size={17} /> : <span>Entrar <ArrowRight size={16} /></span>}
                 </button>
                 <button className="auth-mode-switch" type="button" onClick={() => { setAuthMode("register"); setLoginError(""); }}>
-                  Não tem uma conta? <strong>Criar conta com KeyAuth</strong>
+                  Não tem uma conta? <strong>Criar conta com chave</strong>
                 </button>
                 <div className="auth-security-note"><ShieldCheck size={15} /><span>Conexão protegida. A sessão expira automaticamente.</span></div>
               </form>
@@ -849,17 +1014,17 @@ function App() {
               <form className="auth-card" onSubmit={handleRegister}>
                 <div className="auth-card-heading">
                   <div className="auth-card-icon"><UserRound size={20} /></div>
-                  <span className="auth-card-label">ATIVAÇÃO KEYAUTH</span>
+                  <span className="auth-card-label">ATIVAÇÃO IPTV FLOW</span>
                 </div>
                 <h2>Criar minha conta</h2>
-                <p className="auth-card-description">Ative seu acesso com uma licença KeyAuth. Contas criadas por aqui recebem nível de usuário comum.</p>
+                <p className="auth-card-description">Ative seu acesso com uma chave gerada por um administrador. Contas criadas por aqui recebem nível de usuário comum.</p>
                 <label className="auth-field">
                   <span>Nome de usuário</span>
                   <input type="text" value={registerUsername} onChange={(event) => setRegisterUsername(event.target.value.toLowerCase().replace(/[^a-z0-9_.-]/g, ""))} placeholder="Escolha seu usuário" autoComplete="username" autoCapitalize="none" spellCheck={false} minLength={3} maxLength={32} pattern="[a-z0-9_.-]{3,32}" required />
                 </label>
                 <label className="auth-field">
-                  <span>Chave de ativação KeyAuth</span>
-                  <input type="text" value={registerLicenseKey} onChange={(event) => setRegisterLicenseKey(event.target.value)} placeholder="Cole sua licença" autoComplete="off" autoCapitalize="characters" spellCheck={false} maxLength={160} required />
+                  <span>Chave de acesso IPTV Flow</span>
+                  <input type="text" value={registerLicenseKey} onChange={(event) => setRegisterLicenseKey(event.target.value)} placeholder="Cole sua chave de acesso" autoComplete="off" autoCapitalize="characters" spellCheck={false} maxLength={160} required />
                 </label>
                 <label className="auth-field">
                   <span>Crie sua senha</span>
@@ -889,10 +1054,10 @@ function App() {
                 <button className="auth-mode-switch" type="button" onClick={() => { setAuthMode("login"); setLoginError(""); }}>
                   Já tem uma conta? <strong>Entrar</strong>
                 </button>
-                <div className="auth-security-note"><ShieldCheck size={15} /><span>Sua senha é validada no servidor e enviada ao KeyAuth somente por HTTPS.</span></div>
+                <div className="auth-security-note"><ShieldCheck size={15} /><span>Sua senha é protegida no servidor e armazenada com hash seguro.</span></div>
               </form>
             )}
-            <div className="auth-card-bottom"><LockKeyhole size={12} /> LICENÇA KEYAUTH · PERMISSÕES POR PERFIL</div>
+            <div className="auth-card-bottom"><LockKeyhole size={12} /> CHAVE INTERNA · PERMISSÕES POR PERFIL</div>
           </section>
         </div>
       </div>
@@ -1147,6 +1312,56 @@ function App() {
             </section>
           )}
 
+          {page === "access" && userRole === "admin" && (
+            <section className="page-section">
+              <div className="page-heading">
+                <div><div className="eyebrow"><KeyRound size={13} /> CONTROLE DE ACESSO</div><h1>Chaves de acesso</h1><p>Gere convites individuais para liberar novas contas no IPTV Flow.</p></div>
+                <button className="secondary-button" type="button" onClick={() => { void loadAccessKeys(); if (isOwner) void loadManagedUsers(); }}><RefreshCw size={14} /> Atualizar</button>
+              </div>
+
+              <div className="access-layout">
+                <section className="panel access-create-panel">
+                  <div className="panel-heading"><div><h3>Gerar nova chave</h3><p>Cada chave libera apenas um cadastro.</p></div><span className="access-panel-icon"><KeyRound size={18} /></span></div>
+                  <form className="access-create-form" onSubmit={generateAccessKey}>
+                    <label className="profile-field"><span>Identificação (opcional)</span><input type="text" value={keyLabel} onChange={(event) => setKeyLabel(event.target.value)} placeholder="Ex.: Cliente João" maxLength={60} /></label>
+                    <label className="profile-field"><span>Validade da chave</span><select value={keyExpiry} onChange={(event) => setKeyExpiry(event.target.value)}><option value="1">24 horas</option><option value="7">7 dias</option><option value="30">30 dias</option><option value="90">90 dias</option><option value="365">1 ano</option><option value="never">Sem expiração</option></select></label>
+                    <button className="primary-button" type="submit" disabled={keySubmitting}>{keySubmitting ? <LoaderCircle className="spin" size={15} /> : <Plus size={15} />} {keySubmitting ? "Gerando..." : "Gerar chave de acesso"}</button>
+                  </form>
+                  {generatedKey && <div className="generated-key-box"><div><strong>Chave criada com sucesso</strong><small>Copie agora. Por segurança, o código completo não aparecerá novamente.</small></div><code>{generatedKey}</code><button className="secondary-button" type="button" onClick={() => void copyGeneratedKey()}><Copy size={14} /> Copiar chave</button></div>}
+                </section>
+
+                <section className="panel access-list-panel">
+                  <div className="panel-heading"><div><h3>Chaves emitidas</h3><p>{accessKeys.length} registro(s) no sistema</p></div><span className="access-panel-icon"><ShieldCheck size={18} /></span></div>
+                  {accessKeysLoading ? <div className="access-empty"><LoaderCircle className="spin" size={18} /> Carregando chaves...</div> : accessKeys.length === 0 ? <div className="access-empty"><KeyRound size={22} /><strong>Nenhuma chave emitida</strong><span>Gere a primeira chave para convidar um usuário.</span></div> : (
+                    <div className="access-key-list">
+                      {accessKeys.map((item) => (
+                        <article className="access-key-row" key={item.id}>
+                          <div className="access-key-main"><div><strong>{item.label || "Acesso IPTV Flow"}</strong><code>{item.prefix}••••••••</code></div><span className={"access-status status-" + item.status}>{item.status === "active" ? "Disponível" : item.status === "used" ? "Utilizada" : item.status === "expired" ? "Expirada" : "Revogada"}</span></div>
+                          <div className="access-key-meta"><span>Criada por @{item.createdBy}</span><span>{item.expiresAt ? "Expira em " + new Date(item.expiresAt).toLocaleDateString("pt-BR") : "Sem expiração"}</span>{item.redeemedBy && <span>Resgatada por @{item.redeemedBy}</span>}</div>
+                          {item.status === "active" && <button className="text-button access-revoke-button" type="button" onClick={() => void revokeAccessKey(item.id)}><Trash2 size={13} /> Revogar chave</button>}
+                        </article>
+                      ))}
+                    </div>
+                  )}
+                </section>
+              </div>
+
+              {isOwner && <section className="panel access-users-panel">
+                <div className="panel-heading"><div><h3>Administradores e usuários</h3><p>Somente o proprietário pode conceder ou remover permissões administrativas.</p></div><span className="access-panel-icon"><Users size={18} /></span></div>
+                {managedUsersLoading ? <div className="access-empty"><LoaderCircle className="spin" size={18} /> Carregando usuários...</div> : managedUsers.length === 0 ? <div className="access-empty">Ainda não há contas cadastradas com chave.</div> : (
+                  <div className="access-user-list">
+                    {managedUsers.map((item) => <div className="access-user-row" key={item.username}>
+                      <div className="access-user-avatar"><UserRound size={17} /></div>
+                      <div className="access-user-main"><strong>@{item.username}</strong><small>Criado em {new Date(item.createdAt).toLocaleDateString("pt-BR")} · {item.lastLoginAt ? "Último acesso " + new Date(item.lastLoginAt).toLocaleDateString("pt-BR") : "Ainda não entrou"}</small></div>
+                      <span className={"access-role " + (item.role === "admin" ? "role-admin" : "role-user")}>{item.role === "admin" ? "Administrador" : "Usuário"}</span>
+                      <button className="secondary-button" type="button" disabled={userActionLoading === item.username} onClick={() => void changeUserRole(item.username, item.role === "admin" ? "user" : "admin")}>{userActionLoading === item.username ? <LoaderCircle className="spin" size={14} /> : item.role === "admin" ? "Remover admin" : "Tornar admin"}</button>
+                    </div>)}
+                  </div>
+                )}
+              </section>}
+            </section>
+          )}
+
           {page === "settings" && (
             <section className="page-section">
               <div className="page-heading"><div><div className="eyebrow"><Settings2 size={13} /> PREFERÊNCIAS</div><h1>Configurações</h1><p>Gerencie as conexões e os parâmetros do aplicativo.</p></div></div>
@@ -1193,7 +1408,7 @@ function App() {
                     </div>
                     <div className="profile-meta-row">
                       <div><span>Usuário de acesso</span><strong>{adminUsername}</strong><small>Identificador usado no login. Não é alterado pelo nome de exibição.</small></div>
-                      <div><span>Nível de acesso</span><strong>{userRole === "admin" ? (adminUsername === "1joaodev" ? "Proprietário · Administrador" : "Administrador") : "Usuário"}</strong><small>{userRole === "admin" ? "Acesso administrativo autorizado pelo servidor." : "Acesso comum liberado por licença KeyAuth."}</small></div>
+                      <div><span>Nível de acesso</span><strong>{userRole === "admin" ? (adminUsername === "1joaodev" ? "Proprietário · Administrador" : "Administrador") : "Usuário"}</strong><small>{userRole === "admin" ? "Acesso administrativo autorizado pelo servidor." : "Acesso comum liberado por chave interna do IPTV Flow."}</small></div>
                     </div>
                     <div className="profile-editor-actions">
                       <button className="secondary-button" type="button" onClick={() => setProfileDraft(profile)}>Descartar alterações</button>
@@ -1214,7 +1429,7 @@ function App() {
       </main>
 
       <nav className="mobile-bottom-nav">
-        {navigation.map((item) => { const Icon = item.icon; return <button key={item.id} className={page === item.id ? "active" : ""} onClick={() => navigate(item.id)}><Icon size={19} /><span>{item.id === "overview" ? "Início" : item.id === "new" ? "Novo" : item.id === "history" ? "Histórico" : "Ajustes"}</span></button>; })}
+        {navigation.map((item) => { const Icon = item.icon; return <button key={item.id} className={page === item.id ? "active" : ""} onClick={() => navigate(item.id)}><Icon size={19} /><span>{item.id === "overview" ? "Início" : item.id === "new" ? "Novo" : item.id === "history" ? "Histórico" : item.id === "access" ? "Chaves" : "Ajustes"}</span></button>; })}
       </nav>
 
       {toast && <div className="toast-message"><span><Check size={15} /></span>{toast}<button onClick={() => setToast("")} aria-label="Fechar"><X size={15} /></button></div>}

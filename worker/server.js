@@ -318,7 +318,7 @@ app.get("/api/test-requests/:id", async (req, res) => {
       const assistantTranscript = chat.chatMessages
         .filter((item) => item.role === "assistant")
         .map((item) => item.text)
-        .join("\\n");
+        .join("\n");
       const recommendedApp = extractRecommendedApp(assistantTranscript);
       if (recommendedApp) {
         job = updateJob(req.params.id, { recommendedApp }) || job;

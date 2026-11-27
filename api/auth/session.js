@@ -1,4 +1,4 @@
-import { verifyAdminSession } from "../../lib/admin-auth.js";
+import { verifyUserSession } from "../../lib/admin-auth.js";
 
 export default function handler(req, res) {
   res.setHeader("Cache-Control", "no-store, max-age=0");
@@ -7,7 +7,7 @@ export default function handler(req, res) {
     res.setHeader("Allow", "GET");
     return res.status(405).json({ message: "Método não permitido." });
   }
-  const session = verifyAdminSession(req);
+  const session = verifyUserSession(req);
   if (!session) return res.status(401).json({ authenticated: false });
   return res.status(200).json({
     authenticated: true,

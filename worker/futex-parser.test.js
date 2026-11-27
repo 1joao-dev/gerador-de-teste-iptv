@@ -84,3 +84,23 @@ test("extrai o aplicativo recomendado em respostas específicas para iPhone e iP
 test("não transforma uma indicação genérica da FUTEX em nome de aplicativo", () => {
   assert.equal(extractRecommendedApp("Aplicativo indicado pela FUTEX. Conseguiu instalar o aplicativo?"), undefined);
 });
+
+test("reconhece variações de recomendação da FUTEX para Apple", () => {
+  assert.equal(
+    extractRecommendedApp("O aplicativo indicado pela FUTEX é: IPTV Smarters Pro. Conseguiu instalar?"),
+    "IPTV Smarters Pro",
+  );
+  assert.equal(
+    extractRecommendedApp("A FUTEX recomenda o aplicativo IBO Player para iPhone. Conseguiu instalar?"),
+    "IBO Player",
+  );
+  assert.equal(
+    extractRecommendedApp("Aplicativo para iOS: GSE Smart IPTV. Conseguiu instalar?"),
+    "GSE Smart IPTV",
+  );
+  assert.equal(
+    extractRecommendedApp("Recomendamos instalar o aplicativo XCIPTV no seu iPad. Conseguiu instalar?"),
+    "XCIPTV",
+  );
+});
+

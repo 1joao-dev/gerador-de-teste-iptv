@@ -1,7 +1,7 @@
 import {
   ADMIN_SESSION_TTL_SECONDS,
   clearLoginFailures,
-  createAdminSession,
+  createUserSession,
   isAuthConfigured,
   isSameOriginRequest,
   loginRateLimit,
@@ -9,7 +9,9 @@ import {
   setAdminSessionCookie,
   verifyAdminCredentials,
   getAdminUsername,
+  isAdminUsername,
 } from "../../lib/admin-auth.js";
+import { isKeyAuthConfigured, loginKeyAuthAccount } from "../../lib/keyauth.js";
 
 export default async function handler(req, res) {
   res.setHeader("Cache-Control", "no-store, max-age=0");
@@ -40,18 +42,35 @@ export default async function handler(req, res) {
     return res.status(401).json({ message: "Usuário ou senha inválidos." });
   }
 
-  if (!verifyAdminCredentials(username, password)) {
+  const normalizedUsername = username.trim().toLowerCase();
+  let authenticated = false;
+
+  if (normalizedUsername === getAdminUsername()) {
+    authenticated = verifyAdminCredentials(normalizedUsername, password);
+  } else {
+    if (!isKeyAuthConfigured()) {
+      return res.status(503).json({ message: "O acesso de usuários ainda aguarda a configuração do KeyAuth." });
+    }
+    try {
+      const result = await loginKeyAuthAccount({ username: normalizedUsername, password });
+      authenticated = result.success === true;
+    } catch {
+      return res.status(502).json({ message: "Não foi possível validar sua conta no KeyAuth. Tente novamente." });
+    }
+  }
+
+  if (!authenticated) {
     recordLoginFailure(req);
-    return res.status(401).json({ message: "Usuário ou senha inválidos." });
+    return res.status(401).json({ message: "Usuário ou senha inválidos, ou licença sem validade." });
   }
 
   clearLoginFailures(req);
   try {
-    const token = createAdminSession();
+    const token = createUserSession(normalizedUsername);
     setAdminSessionCookie(res, token);
     return res.status(200).json({
       authenticated: true,
-      user: { username: getAdminUsername(), role: "admin" },
+      user: { username: normalizedUsername, role: isAdminUsername(normalizedUsername) ? "admin" : "user" },
       expiresIn: ADMIN_SESSION_TTL_SECONDS,
     });
   } catch {

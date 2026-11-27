@@ -30,12 +30,12 @@ Em **Project → Settings → Environment Variables**, adicione:
 ```env
 WORKER_API_URL=https://SEU-WORKER.up.railway.app
 WORKER_API_TOKEN=mesmo-token-configurado-no-worker
-APP_ACCESS_CODE=senha-administrativa-aleatoria-de-pelo-menos-32-caracteres
+APP_ACCESS_CODE=senha-forte-do-proprietario-de-pelo-menos-32-caracteres
 APP_SESSION_SECRET=segredo-aleatorio-com-pelo-menos-64-bytes
-ADMIN_USERNAME=admin
+ADMIN_USERNAME=1joaodev
 ```
 
-Gere `APP_ACCESS_CODE` com `openssl rand -hex 32` e `APP_SESSION_SECRET` com `openssl rand -hex 64`. Mantenha ambos privados e diferentes. `ADMIN_USERNAME` é opcional e assume `admin` quando omitido. Não use prefixo `VITE_` nessas variáveis. O login é validado no servidor; a sessão usa cookie `HttpOnly; Secure; SameSite=Strict` com validade de 4 horas. O navegador nunca recebe a senha administrativa nem o token interno do worker. O proxy aceita apenas sessões administrativas válidas. Configure as variáveis em Production e Preview e faça um novo deploy após alterar qualquer segredo.
+Gere `APP_ACCESS_CODE` com `openssl rand -hex 32` e `APP_SESSION_SECRET` com `openssl rand -hex 64`. Mantenha ambos privados e diferentes. `ADMIN_USERNAME=1joaodev` identifica a conta proprietária, que usa `APP_ACCESS_CODE` como senha principal. Não use prefixo `VITE_` nas variáveis secretas. O cadastro público exige uma chave interna de uso único gerada no próprio painel por um proprietário ou administrador. As senhas de todas as contas comuns exigem pelo menos 8 caracteres, uma maiúscula, um número e um símbolo; a força aparece como Fraca, Média ou Forte. As senhas são armazenadas com scrypt e as chaves de acesso somente como hashes HMAC no volume persistente do worker. Administradores podem gerar, consultar e revogar chaves; somente o proprietário pode promover ou rebaixar administradores. As sessões usam cookie `HttpOnly; Secure; SameSite=Strict` com validade de 4 horas. O worker valida o papel atual em cada requisição e cada usuário vê somente seus próprios testes, enquanto administradores veem todos. Configure as variáveis em Production e Preview e faça um novo deploy após alterar qualquer segredo.
 
 ## Configuração do worker
 
@@ -49,6 +49,8 @@ PORT=8787
 DATA_DIR=/data
 DATA_ENCRYPTION_KEY=chave-hexadecimal-de-64-caracteres
 API_TOKEN=token-aleatorio-longo
+OWNER_USERNAME=1joaodev
+AUTH_KEY_PEPPER=segredo-estavel-com-pelo-menos-32-caracteres
 FUTEX_URL=https://futex.com.br/teste/
 FUTEX_AUTOMATION_ENABLED=false
 FUTEX_HEADLESS=true
@@ -57,7 +59,7 @@ MAX_ACTIVE_SESSIONS=1
 MAX_SESSION_MINUTES=30
 ```
 
-Gere duas chaves independentes com `openssl rand -hex 32`: uma para `API_TOKEN` (use o mesmo valor em `WORKER_API_TOKEN` na Vercel) e outra para `DATA_ENCRYPTION_KEY`. No Windows PowerShell, use `[Convert]::ToHexString([Security.Cryptography.RandomNumberGenerator]::GetBytes(32))` para cada chave. Esta segunda chave criptografa nome, telefone e credenciais no histórico persistido. Guarde-a com segurança e nunca a troque enquanto houver dados salvos. Mantenha `FUTEX_AUTOMATION_ENABLED=false` até executar o diagnóstico e validar o fluxo real.
+Gere uma chave para `API_TOKEN` e use o mesmo valor em `WORKER_API_TOKEN` na Vercel; gere outra para `DATA_ENCRYPTION_KEY` e uma terceira para `AUTH_KEY_PEPPER`. Use `openssl rand -hex 32` para cada uma. No Windows PowerShell, use `[Convert]::ToHexString([Security.Cryptography.RandomNumberGenerator]::GetBytes(32))`. `DATA_ENCRYPTION_KEY` protege nome, telefone e credenciais no histórico. `AUTH_KEY_PEPPER` protege os hashes das chaves de acesso; mantenha-o estável enquanto houver chaves não resgatadas. Defina `OWNER_USERNAME=1joaodev` e mantenha-o igual a `ADMIN_USERNAME` na Vercel. Mantenha `FUTEX_AUTOMATION_ENABLED=false` até executar o diagnóstico e validar o fluxo real.
 
 ## Desenvolvimento local
 
@@ -110,4 +112,7 @@ O workflow **FUTEX live diagnostic** abre o portal em um Chromium isolado, ident
 - Sessões expiram após 30 minutos de inatividade.
 - Nome, telefone e credenciais são criptografados com AES-256-GCM antes de serem gravados no histórico do volume privado do worker. Proteja também as chaves e o volume.
 - Reiniciar o worker encerra sessões abertas; as solicitações interrompidas ficam marcadas para ação manual.
-- Para múltiplos usuários, migre o histórico para PostgreSQL e implemente autenticação individual.
+- Contas comuns são criadas com uma chave interna de uso único e recebem o papel `user`; a conta proprietária `1joaodev` continua protegida por `APP_ACCESS_CODE`.
+- Somente o proprietário pode promover contas existentes a administradoras; o cadastro público nunca permite escolher o papel administrativo.
+- O histórico do worker é filtrado por usuário; contas comuns não conseguem consultar solicitações de outras contas.
+- As chaves são armazenadas como HMAC-SHA256, exibidas integralmente somente uma vez e podem ser revogadas antes do resgate.

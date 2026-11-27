@@ -626,7 +626,7 @@ export async function startFutexSession(payload) {
         .test(latestBotMessage);
 
       if (asksForBrand) {
-        const normalize = (value) => value.normalize("NFD").replace(/[\\u0300-\\u036f]/g, "").trim().toLowerCase();
+        const normalize = (value) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase();
         const brandOption = afterDeviceChoice.chatOptions.find(
           (option) => normalize(option) === normalize(payload.brand),
         );
@@ -636,7 +636,7 @@ export async function startFutexSession(payload) {
           await clickChoice(scope, brandOption);
           await waitForFutexBotReply(session, beforeBrandChoice, 25_000);
         } else {
-          const otherOption = afterDeviceChoice.chatOptions.find((option) => /^outra(?:\\s*\\(.*\\))?$/i.test(option));
+          const otherOption = afterDeviceChoice.chatOptions.find((option) => /^outra(?:\s*\(.*\))?$/i.test(option));
           if (otherOption) {
             const beforeOtherChoice = afterDeviceChoice.chatBotCount;
             await clickChoice(scope, otherOption);

@@ -176,7 +176,7 @@ function deviceChoiceLabels(device) {
     "Roku TV": ["Roku TV", "Roku"],
     "TV Box": ["TV Box", "TVBox", "Box TV"],
     "Celular Android": ["Celular Android", "Android", "Smartphone Android"],
-    "iPhone / iPad": ["iPhone / iPad", "iPhone/iPad", "iPhone", "iPad"],
+    "iPhone / iPad": ["iPhone / iPad", "iPhone/iPad", "iPhone", "iPad", "iOS", "Apple", "Apple iOS", "iPhone e iPad", "iPhone / iPad (iOS)"],
     "Computador": ["Computador", "PC", "Notebook"],
     "Fire Stick": ["Fire Stick", "Fire TV Stick", "Amazon Fire TV"],
     "Xbox": ["Xbox"],
@@ -606,18 +606,57 @@ export async function startFutexSession(payload) {
     await sendChatMessage(scope, payload.contact.replace(/\D/g, ""));
 
     await waitForText(scope, /onde.{0,60}assistir|qual.{0,40}dispositivo|em qual.{0,40}assistir|selecione.{0,40}dispositivo/i, 25_000);
-    await clickChoiceAny(scope, deviceChoiceLabels(payload.device));
 
-    await waitForText(scope, /qual.{0,40}marca|marca.{0,40}(?:tv|aparelho|dispositivo)/i, 25_000);
-    const knownBrands = ["Samsung", "LG", "TCL", "Sony", "Philips", "Panasonic", "Philco", "AOC", "Roku"];
-    if (!knownBrands.includes(payload.brand)) {
-      await clickChoiceAny(scope, ["Outra (digitar)", "Outra", "Outros"]);
-      await sendChatMessage(scope, payload.brand);
-    } else {
-      await clickChoice(scope, payload.brand);
-    }
-
+    // O fluxo de iPhone/iPad pode pular a pergunta de marca: o próprio dispositivo
+    // já identifica Apple. Aguarda a próxima resposta e só envia a marca se a FUTEX
+    // realmente solicitar essa informação.
     session.scope = scope;
+    const isAppleDevice = /iphone|ipad/i.test(payload.device) || /apple/i.test(payload.brand);
+
+    if (isAppleDevice) {
+      const beforeDeviceChoice = await readFutexConversation(session);
+      await clickChoiceAny(scope, deviceChoiceLabels(payload.device));
+      await waitForFutexBotReply(session, beforeDeviceChoice.chatBotCount, 25_000);
+
+      const afterDeviceChoice = await readFutexConversation(session);
+      const latestBotMessage = [...afterDeviceChoice.chatMessages]
+        .reverse()
+        .find((item) => item.role === "assistant")?.text || "";
+      const asksForBrand = /qual.{0,50}(?:marca|fabricante)|(?:marca|fabricante).{0,50}(?:aparelho|dispositivo|celular)/i
+        .test(latestBotMessage);
+
+      if (asksForBrand) {
+        const normalize = (value) => value.normalize("NFD").replace(/[\\u0300-\\u036f]/g, "").trim().toLowerCase();
+        const brandOption = afterDeviceChoice.chatOptions.find(
+          (option) => normalize(option) === normalize(payload.brand),
+        );
+
+        if (brandOption) {
+          const beforeBrandChoice = afterDeviceChoice.chatBotCount;
+          await clickChoice(scope, brandOption);
+          await waitForFutexBotReply(session, beforeBrandChoice, 25_000);
+        } else {
+          const otherOption = afterDeviceChoice.chatOptions.find((option) => /^outra(?:\\s*\\(.*\\))?$/i.test(option));
+          if (otherOption) {
+            const beforeOtherChoice = afterDeviceChoice.chatBotCount;
+            await clickChoice(scope, otherOption);
+            await waitForFutexBotReply(session, beforeOtherChoice, 25_000);
+          }
+          await sendChatMessage(scope, payload.brand);
+        }
+      }
+    } else {
+      await clickChoiceAny(scope, deviceChoiceLabels(payload.device));
+      await waitForText(scope, /qual.{0,40}marca|marca.{0,40}(?:tv|aparelho|dispositivo)/i, 25_000);
+
+      const knownBrands = ["Samsung", "LG", "TCL", "Sony", "Philips", "Panasonic", "Philco", "AOC", "Roku", "Apple"];
+      if (!knownBrands.includes(payload.brand)) {
+        await clickChoiceAny(scope, ["Outra (digitar)", "Outra", "Outros"]);
+        await sendChatMessage(scope, payload.brand);
+      } else {
+        await clickChoice(scope, payload.brand);
+      }
+    }
     let result = await waitForAppStep(scope);
 
     // Modo automático: avança no chatbot sem abrir a FUTEX no aparelho do usuário.

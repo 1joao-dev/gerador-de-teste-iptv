@@ -1,4 +1,4 @@
-import crypto from "node:crypto";
+import { isSameOriginRequest, verifyAdminSession } from "../lib/admin-auth.js";
 
 const allowedRoutes = [
   { method: "GET", pattern: /^\/api\/health$/ },
@@ -17,19 +17,12 @@ export default async function handler(req, res) {
     return res.status(405).json({ message: "Método não permitido." });
   }
 
-  const appAccessCode = process.env.APP_ACCESS_CODE || "";
-  const providedCodeHeader = req.headers["x-app-access-code"];
-  const providedCode = Array.isArray(providedCodeHeader) ? providedCodeHeader[0] : providedCodeHeader || "";
-  if (appAccessCode.length < 32) {
-    return res.status(503).json({ message: "Configure APP_ACCESS_CODE na Vercel com pelo menos 32 caracteres aleatórios." });
+  if (req.method === "POST" && !isSameOriginRequest(req)) {
+    return res.status(403).json({ message: "Origem da requisição não autorizada." });
   }
 
-  const expectedCodeBuffer = Buffer.from(appAccessCode);
-  const providedCodeBuffer = Buffer.from(String(providedCode));
-  const validAccessCode = expectedCodeBuffer.length === providedCodeBuffer.length
-    && crypto.timingSafeEqual(expectedCodeBuffer, providedCodeBuffer);
-  if (!validAccessCode) {
-    return res.status(401).json({ message: "Informe o código de acesso do painel em Configurações." });
+  if (!verifyAdminSession(req)) {
+    return res.status(401).json({ message: "Sessão administrativa expirada. Entre novamente." });
   }
 
   const workerBase = process.env.WORKER_API_URL;

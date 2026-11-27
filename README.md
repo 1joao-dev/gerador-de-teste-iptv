@@ -30,10 +30,12 @@ Em **Project → Settings → Environment Variables**, adicione:
 ```env
 WORKER_API_URL=https://SEU-WORKER.up.railway.app
 WORKER_API_TOKEN=mesmo-token-configurado-no-worker
-APP_ACCESS_CODE=chave-aleatoria-de-pelo-menos-32-caracteres
+APP_ACCESS_CODE=senha-administrativa-aleatoria-de-pelo-menos-32-caracteres
+APP_SESSION_SECRET=segredo-aleatorio-com-pelo-menos-64-bytes
+ADMIN_USERNAME=admin
 ```
 
-Gere `APP_ACCESS_CODE` com `openssl rand -hex 16` e mantenha-o privado. Não use prefixo `VITE_` nessas variáveis. O proxy lê os segredos no servidor e os injeta somente na chamada privada ao worker. O histórico de clientes e credenciais é carregado do servidor e não é salvo no armazenamento local do navegador. O painel solicita o `APP_ACCESS_CODE` em Configurações antes de consultar o backend. Não compartilhe esse código.
+Gere `APP_ACCESS_CODE` com `openssl rand -hex 32` e `APP_SESSION_SECRET` com `openssl rand -hex 64`. Mantenha ambos privados e diferentes. `ADMIN_USERNAME` é opcional e assume `admin` quando omitido. Não use prefixo `VITE_` nessas variáveis. O login é validado no servidor; a sessão usa cookie `HttpOnly; Secure; SameSite=Strict` com validade de 4 horas. O navegador nunca recebe a senha administrativa nem o token interno do worker. O proxy aceita apenas sessões administrativas válidas. Configure as variáveis em Production e Preview e faça um novo deploy após alterar qualquer segredo.
 
 ## Configuração do worker
 

@@ -23,6 +23,7 @@ import {
   LifeBuoy,
   LoaderCircle,
   LockKeyhole,
+  LogOut,
   Menu,
   Monitor,
   MoreHorizontal,
@@ -63,8 +64,6 @@ type TestRequest = {
   appInstalled?: boolean;
   message?: string;
 };
-
-const APP_ACCESS_CODE_STORAGE_KEY = "iptv-flow-app-access-code-v1";
 
 const DEVICE_OPTIONS = [
   { value: "Smart TV", detail: "Samsung, LG e outras", icon: Tv },
@@ -163,7 +162,12 @@ function StatusPill({ status }: { status: RequestStatus }) {
 function App() {
   const [page, setPage] = useState<Page>("overview");
   const [requests, setRequests] = useState<TestRequest[]>([]);
-  const [loaded, setLoaded] = useState(false);
+  const [authState, setAuthState] = useState<"checking" | "authenticated" | "unauthenticated">("checking");
+  const [adminUsername, setAdminUsername] = useState("admin");
+  const [loginUsername, setLoginUsername] = useState("admin");
+  const [loginPassword, setLoginPassword] = useState("");
+  const [loginError, setLoginError] = useState("");
+  const [loginSubmitting, setLoginSubmitting] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [toast, setToast] = useState("");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -172,8 +176,6 @@ function App() {
   const [confirmingApp, setConfirmingApp] = useState(false);
   const [refreshingFlow, setRefreshingFlow] = useState(false);
   const [workerHealth, setWorkerHealth] = useState<"checking" | "online" | "offline">("checking");
-  const [appAccessCode, setAppAccessCode] = useState("");
-  const [appAccessCodeDraft, setAppAccessCodeDraft] = useState("");
   const [workerAutomationEnabled, setWorkerAutomationEnabled] = useState(false);
   const [diagnosingFutex, setDiagnosingFutex] = useState(false);
   const [futexDiagnostic, setFutexDiagnostic] = useState("");
@@ -182,24 +184,30 @@ function App() {
   const [form, setForm] = useState({ customerName: "", contact: "", device: "", brand: "", brandOther: "" });
 
   useEffect(() => {
-    try {
-      const savedAccessCode = localStorage.getItem(APP_ACCESS_CODE_STORAGE_KEY) ?? "";
-      setAppAccessCode(savedAccessCode);
-      setAppAccessCodeDraft(savedAccessCode);
-    } catch {
-      setAppAccessCode("");
-      setAppAccessCodeDraft("");
-    }
-    setLoaded(true);
+    let cancelled = false;
+    fetch("/api/auth/session", { credentials: "same-origin", cache: "no-store" })
+      .then(async (response) => {
+        if (!response.ok) throw new Error("Sessão ausente.");
+        return response.json();
+      })
+      .then((data) => {
+        if (cancelled) return;
+        setAdminUsername(data.user?.username || "admin");
+        setAuthState("authenticated");
+      })
+      .catch(() => {
+        if (!cancelled) setAuthState("unauthenticated");
+      });
+    return () => { cancelled = true; };
   }, []);
 
   useEffect(() => {
-    if (!loaded) return;
+    if (authState !== "authenticated") return;
     void checkWorkerHealth(true);
     void refreshHistory(true);
     const interval = window.setInterval(() => { void checkWorkerHealth(true); }, 30_000);
     return () => window.clearInterval(interval);
-  }, [loaded, appAccessCode]);
+  }, [authState]);
 
   useEffect(() => {
     if (!toast) return;
@@ -236,11 +244,64 @@ function App() {
 
   function apiRequest(path: string, options: RequestInit = {}) {
     const headers = new Headers(options.headers || {});
-    if (appAccessCode) headers.set("x-app-access-code", appAccessCode);
     if (options.body && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
     const requestUrl = new URL(API_BASE_URL, window.location.origin);
     requestUrl.searchParams.set("path", path);
-    return fetch(requestUrl.toString(), { ...options, headers, cache: "no-store" });
+    return fetch(requestUrl.toString(), {
+      ...options,
+      headers,
+      credentials: "same-origin",
+      cache: "no-store",
+    }).then((response) => {
+      if (response.status === 401) {
+        setAuthState("unauthenticated");
+        setLoginPassword("");
+      }
+      return response;
+    });
+  }
+
+  async function handleLogin(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (loginSubmitting) return;
+    setLoginSubmitting(true);
+    setLoginError("");
+    try {
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username: loginUsername.trim(), password: loginPassword }),
+        cache: "no-store",
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.message || "Não foi possível autenticar.");
+      setAdminUsername(result.user?.username || loginUsername.trim() || "admin");
+      setLoginPassword("");
+      setAuthState("authenticated");
+    } catch (error) {
+      setLoginError(error instanceof Error ? error.message : "Falha ao entrar. Tente novamente.");
+    } finally {
+      setLoginSubmitting(false);
+    }
+  }
+
+  async function handleLogout() {
+    try {
+      await fetch("/api/auth/logout", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        cache: "no-store",
+      });
+    } finally {
+      setRequests([]);
+      setSelectedRequest(null);
+      setFlowRequest(null);
+      setLoginPassword("");
+      setLoginError("");
+      setAuthState("unauthenticated");
+    }
   }
 
   async function checkWorkerHealth(silent = false) {
@@ -257,16 +318,6 @@ function App() {
       if (!silent) setToast(error instanceof Error ? error.message : "Não foi possível conectar ao worker.");
     }
   }
-
-  function saveAppAccessCode() {
-    const nextCode = appAccessCodeDraft.trim();
-    if (nextCode) localStorage.setItem(APP_ACCESS_CODE_STORAGE_KEY, nextCode);
-    else localStorage.removeItem(APP_ACCESS_CODE_STORAGE_KEY);
-    setAppAccessCode(nextCode);
-    setToast(nextCode ? "Código de acesso salvo neste navegador." : "Código de acesso removido.");
-    setWorkerHealth("checking");
-  }
-
 
   async function runFutexDiagnostic() {
     setDiagnosingFutex(true);
@@ -483,6 +534,95 @@ function App() {
     { id: "settings" as const, label: "Configurações", icon: Settings2 },
   ];
 
+  if (authState === "checking") {
+    return (
+      <div className="auth-screen auth-loading-screen">
+        <div className="auth-loading-card">
+          <div className="auth-logo"><FlowMark size={35} /></div>
+          <LoaderCircle className="spin" size={20} />
+          <span>Verificando sessão segura...</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (authState === "unauthenticated") {
+    return (
+      <div className="auth-screen">
+        <div className="auth-grid" aria-hidden="true" />
+        <div className="auth-orbit auth-orbit-one" aria-hidden="true" />
+        <div className="auth-orbit auth-orbit-two" aria-hidden="true" />
+        <div className="auth-layout">
+          <section className="auth-intro">
+            <div className="auth-brand">
+              <div className="auth-logo"><FlowMark size={35} /></div>
+              <div><strong>IPTV<span>Flow</span></strong><small>SMART TEST EXPERIENCE</small></div>
+              <span className="auth-brand-status"><i /> SISTEMA ONLINE</span>
+            </div>
+            <div className="auth-intro-copy">
+              <div className="auth-eyebrow"><ShieldCheck size={14} /> CENTRAL ADMINISTRATIVA</div>
+              <h1>Seu controle.<br /><em>Seu acesso.</em></h1>
+              <p>Um ambiente reservado para administrar a operação do IPTV Flow com autenticação protegida e acesso controlado.</p>
+            </div>
+            <div className="auth-feature-list">
+              <div><span><LockKeyhole size={16} /></span><div><strong>Acesso restrito</strong><small>Somente credenciais administrativas autorizadas.</small></div></div>
+              <div><span><ShieldCheck size={16} /></span><div><strong>Sessão protegida</strong><small>Cookie seguro, sem senha salva no dispositivo.</small></div></div>
+              <div><span><Activity size={16} /></span><div><strong>Operação isolada</strong><small>As chaves internas permanecem no servidor.</small></div></div>
+            </div>
+            <div className="auth-footer-note"><span /> IPTV FLOW <i /> ADMIN CONTROL CENTER</div>
+          </section>
+
+          <section className="auth-card-wrap">
+            <form className="auth-card" onSubmit={handleLogin}>
+              <div className="auth-card-heading">
+                <div className="auth-card-icon"><LockKeyhole size={20} /></div>
+                <span className="auth-card-label">LOGIN SEGURO</span>
+              </div>
+              <h2>Acesso administrativo</h2>
+              <p className="auth-card-description">Entre com suas credenciais para continuar.</p>
+
+              <label className="auth-field">
+                <span>Usuário</span>
+                <input
+                  type="text"
+                  value={loginUsername}
+                  onChange={(event) => setLoginUsername(event.target.value)}
+                  placeholder="admin"
+                  autoComplete="username"
+                  autoCapitalize="none"
+                  spellCheck={false}
+                  maxLength={64}
+                  required
+                />
+              </label>
+              <label className="auth-field">
+                <span>Senha de acesso</span>
+                <input
+                  type="password"
+                  value={loginPassword}
+                  onChange={(event) => setLoginPassword(event.target.value)}
+                  placeholder="Digite sua senha administrativa"
+                  autoComplete="current-password"
+                  maxLength={256}
+                  required
+                />
+              </label>
+
+              {loginError && <div className="auth-error" role="alert"><X size={15} /> {loginError}</div>}
+
+              <button className="auth-submit" type="submit" disabled={loginSubmitting || !loginUsername.trim() || !loginPassword}>
+                {loginSubmitting ? <LoaderCircle className="spin" size={17} /> : <span>Entrar no painel <ArrowRight size={16} /></span>}
+              </button>
+
+              <div className="auth-security-note"><ShieldCheck size={15} /><span>Conexão protegida. A sessão expira automaticamente.</span></div>
+            </form>
+            <div className="auth-card-bottom"><LockKeyhole size={12} /> ÁREA EXCLUSIVA PARA ADMINISTRADORES</div>
+          </section>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="app-shell cyber-shell" data-page={page} data-worker-state={workerHealth}>
       <aside className={"sidebar " + (mobileMenuOpen ? "sidebar-open" : "")}>
@@ -524,7 +664,7 @@ function App() {
           </div>
           <div className="profile-row">
             <div className="profile-avatar">AD</div>
-            <div className="profile-copy"><strong>Administrador</strong><small>Conta local</small></div>
+            <div className="profile-copy"><strong>{adminUsername}</strong><small>Administrador autenticado</small></div>
             <MoreHorizontal size={18} />
           </div>
         </div>
@@ -544,6 +684,9 @@ function App() {
             </div>
             <button className="icon-button notification-button" onClick={() => setToast("Você está em dia. Nenhuma notificação nova.")} aria-label="Notificações">
               <Bell size={18} /><i />
+            </button>
+            <button className="icon-button auth-logout-button" onClick={() => void handleLogout()} aria-label="Sair da conta" title="Sair">
+              <LogOut size={17} />
             </button>
             <div className="topbar-avatar">AD</div>
           </div>
@@ -732,8 +875,8 @@ function App() {
             <section className="page-section">
               <div className="page-heading"><div><div className="eyebrow"><Settings2 size={13} /> PREFERÊNCIAS</div><h1>Configurações</h1><p>Gerencie as conexões e os parâmetros do aplicativo.</p></div></div>
               <div className="settings-layout">
-                <section className="panel settings-panel"><div className="settings-heading"><span className="settings-icon"><RadioTower size={19} /></span><div><h3>Integração de automação</h3><p>Conexão entre o aplicativo e o serviço que processa as solicitações.</p></div><span className={"config-value " + (automationReady ? "configured" : "pending")}>{workerHealth === "checking" ? "Verificando" : automationReady ? "Ativo" : workerHealth === "online" ? "Pausado" : "Offline"}</span></div><div className="settings-row"><div><strong>Proxy seguro da aplicação</strong><small>A chave do worker permanece no servidor Vercel.</small></div><span className="config-value configured">Configurado</span></div><div className="api-token-config"><label className="field"><span>Código de acesso do painel <small>APP_ACCESS_CODE</small></span><input type="password" value={appAccessCodeDraft} onChange={(event) => setAppAccessCodeDraft(event.target.value)} placeholder="Digite o código configurado na Vercel" autoComplete="current-password" /></label><button className="secondary-button" type="button" onClick={saveAppAccessCode}><Check size={14} /> Salvar código</button><p>Use um código aleatório com pelo menos 32 caracteres, diferente do token do worker. O token interno nunca é enviado ao navegador.</p></div><div className="settings-row"><div><strong>Worker de automação</strong><small>Processador Playwright executado em servidor persistente.</small></div><span className={"config-value " + (workerHealth === "online" ? "configured" : "pending")}>{workerHealth === "checking" ? "Verificando" : workerHealth === "online" ? "Online" : "Offline"}</span></div><div className="settings-row"><div><strong>Conexão FUTEX</strong><small>O worker usa o atendimento original da FUTEX e devolve os dados ao IPTV Flow.</small></div><span className={"config-value " + (automationReady ? "configured" : "pending")}>{workerAutomationEnabled ? "Ativa" : "Desativada"}</span></div><div className="settings-row"><div><strong>Formulário próprio + FUTEX</strong><small>O usuário preenche o formulário próprio; a FUTEX processa o teste em segundo plano.</small></div><span className="config-value configured">Integração</span></div>
-<div className="settings-callout"><LockKeyhole size={16} /><p>O código de acesso do painel fica salvo localmente neste navegador. O token interno do worker fica somente nas variáveis de ambiente dos servidores e nunca é enviado ao navegador.</p></div><button className="secondary-button" type="button" onClick={() => void checkWorkerHealth()}><RefreshCw size={14} /> Verificar conexão</button><button className="secondary-button" type="button" onClick={() => void runFutexDiagnostic()} disabled={diagnosingFutex || workerHealth !== "online"}>{diagnosingFutex ? <LoaderCircle className="spin" size={14} /> : <Activity size={14} />} {diagnosingFutex ? "Analisando site..." : "Diagnosticar FUTEX"}</button>{futexDiagnostic && <><pre className="diagnostic-output">{futexDiagnostic}</pre><button className="text-button" type="button" onClick={() => void copyValue("Diagnóstico", futexDiagnostic)}><Copy size={14} /> Copiar diagnóstico</button></>}</section>
+                <section className="panel settings-panel"><div className="settings-heading"><span className="settings-icon"><RadioTower size={19} /></span><div><h3>Integração de automação</h3><p>Conexão entre o aplicativo e o serviço que processa as solicitações.</p></div><span className={"config-value " + (automationReady ? "configured" : "pending")}>{workerHealth === "checking" ? "Verificando" : automationReady ? "Ativo" : workerHealth === "online" ? "Pausado" : "Offline"}</span></div><div className="settings-row"><div><strong>Proxy seguro da aplicação</strong><small>A chave do worker permanece no servidor Vercel.</small></div><span className="config-value configured">Configurado</span></div><div className="settings-row"><div><strong>Autenticação administrativa</strong><small>Acesso por sessão segura, sem armazenar senha no navegador.</small></div><span className="config-value configured">Protegida</span></div><div className="settings-row"><div><strong>Worker de automação</strong><small>Processador Playwright executado em servidor persistente.</small></div><span className={"config-value " + (workerHealth === "online" ? "configured" : "pending")}>{workerHealth === "checking" ? "Verificando" : workerHealth === "online" ? "Online" : "Offline"}</span></div><div className="settings-row"><div><strong>Conexão FUTEX</strong><small>O worker usa o atendimento original da FUTEX e devolve os dados ao IPTV Flow.</small></div><span className={"config-value " + (automationReady ? "configured" : "pending")}>{workerAutomationEnabled ? "Ativa" : "Desativada"}</span></div><div className="settings-row"><div><strong>Formulário próprio + FUTEX</strong><small>O usuário preenche o formulário próprio; a FUTEX processa o teste em segundo plano.</small></div><span className="config-value configured">Integração</span></div>
+<div className="settings-callout"><LockKeyhole size={16} /><p>A sessão administrativa usa cookie HttpOnly, Secure e SameSite=Strict. A senha é validada exclusivamente no servidor; o token interno do worker nunca é enviado ao navegador.</p></div><button className="secondary-button" type="button" onClick={() => void checkWorkerHealth()}><RefreshCw size={14} /> Verificar conexão</button><button className="secondary-button" type="button" onClick={() => void runFutexDiagnostic()} disabled={diagnosingFutex || workerHealth !== "online"}>{diagnosingFutex ? <LoaderCircle className="spin" size={14} /> : <Activity size={14} />} {diagnosingFutex ? "Analisando site..." : "Diagnosticar FUTEX"}</button>{futexDiagnostic && <><pre className="diagnostic-output">{futexDiagnostic}</pre><button className="text-button" type="button" onClick={() => void copyValue("Diagnóstico", futexDiagnostic)}><Copy size={14} /> Copiar diagnóstico</button></>}</section>
                 <section className="panel settings-panel"><div className="settings-heading"><span className="settings-icon"><Gauge size={19} /></span><div><h3>Ambiente do aplicativo</h3><p>Informações de execução desta versão.</p></div></div><div className="settings-row"><div><strong>Interface web</strong><small>Aplicação React responsiva.</small></div><span className="config-value configured">Operacional</span></div><div className="settings-row"><div><strong>Armazenamento local</strong><small>Rascunhos salvos neste navegador.</small></div><span className="config-value configured">Ativo</span></div><div className="settings-row"><div><strong>Sincronização entre dispositivos</strong><small>Histórico persistido no volume do servidor worker.</small></div><span className="config-value configured">Preparada</span></div></section>
               </div>
             </section>

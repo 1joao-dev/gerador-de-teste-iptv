@@ -19,6 +19,7 @@ import {
   clickFutexChatOption,
   inspectFutexPage,
 } from "./futex-automation.js";
+import { extractRecommendedApp } from "./futex-parser.js";
 
 const app = express();
 const dataEncryptionKey = createDataEncryptionKey(process.env.DATA_ENCRYPTION_KEY, process.env.NODE_ENV === "production");
@@ -299,6 +300,31 @@ app.get("/api/test-requests/:id", async (req, res) => {
       if (parsedResult?.status === "completed") closeSessionForJob(req.params.id, session);
     } catch {
       // Mantém a última conversa conhecida se o widget estiver atualizando.
+    }
+  }
+
+  // Reprocessa a indicação do aplicativo nas sessões automáticas já abertas.
+  // Assim, solicitações antigas que receberam o texto genérico podem ser corrigidas
+  // sem exigir que o usuário gere outro teste.
+  if (
+    session &&
+    !job.manualChat &&
+    job.status === "awaiting_app" &&
+    (!job.recommendedApp || job.recommendedApp === "Aplicativo indicado pela FUTEX") &&
+    !busySessions.has(req.params.id)
+  ) {
+    try {
+      const chat = await readFutexConversation(session);
+      const assistantTranscript = chat.chatMessages
+        .filter((item) => item.role === "assistant")
+        .map((item) => item.text)
+        .join("\\n");
+      const recommendedApp = extractRecommendedApp(assistantTranscript);
+      if (recommendedApp) {
+        job = updateJob(req.params.id, { recommendedApp }) || job;
+      }
+    } catch {
+      // Mantém a indicação atual se a conversa estiver atualizando.
     }
   }
 

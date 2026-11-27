@@ -61,6 +61,8 @@ Use o resultado para validar os seletores antes de habilitar a automação. O us
 | `DATA_DIR` | Recomendado | Diretório persistente para `jobs.json`; use `/data` com volume |
 | `DATA_ENCRYPTION_KEY` | Sim em produção | Chave hexadecimal de 64 caracteres para criptografar nome, telefone e credenciais com AES-256-GCM |
 | `API_TOKEN` | Sim em produção | Token aleatório com pelo menos 32 caracteres para autenticar a API |
+| `OWNER_USERNAME` | Recomendado | Nome de usuário proprietário, padrão `1joaodev` |
+| `AUTH_KEY_PEPPER` | Recomendado | Segredo estável com pelo menos 32 caracteres para gerar hashes das chaves de acesso; se omitido, usa `API_TOKEN` |
 | `ALLOWED_ORIGINS` | Não | Origens permitidas pelo CORS; o proxy Vercel usa chamadas server-to-server |
 | `FUTEX_URL` | Não | Página pública de teste |
 | `FUTEX_AUTOMATION_ENABLED` | Sim para gerar | Começa como false; habilite somente depois da validação |
@@ -69,7 +71,7 @@ Use o resultado para validar os seletores antes de habilitar a automação. O us
 | `MAX_ACTIVE_SESSIONS` | Não | Sessões simultâneas, padrão 1 |
 | `MAX_SESSION_MINUTES` | Não | Tempo máximo aguardando confirmação, padrão 30 |
 
-Gere duas chaves independentes com `openssl rand -hex 32`: uma para `API_TOKEN` (use o mesmo valor em `WORKER_API_TOKEN` na Vercel) e outra para `DATA_ENCRYPTION_KEY`. A chave de criptografia protege nome, telefone e credenciais no arquivo `jobs.json`. Guarde-a com segurança e nunca a troque enquanto houver dados salvos. Na Vercel, gere `APP_ACCESS_CODE` com `openssl rand -hex 16` e informe esse código uma vez em Configurações no painel.
+Gere duas chaves independentes com `openssl rand -hex 32`: uma para `API_TOKEN` (use o mesmo valor em `WORKER_API_TOKEN` na Vercel) e outra para `DATA_ENCRYPTION_KEY`. A chave de criptografia protege nome, telefone e credenciais no arquivo `jobs.json`. Guarde-a com segurança e nunca a troque enquanto houver dados salvos. O armazenamento de autenticação fica em `auth.json` no mesmo volume: as senhas são derivadas com scrypt e as chaves de acesso são armazenadas somente como HMAC-SHA256. Defina `AUTH_KEY_PEPPER` como um segredo independente e estável; não o altere enquanto houver chaves emitidas, pois isso invalidaria as chaves ainda não utilizadas. Defina `OWNER_USERNAME=1joaodev`. Na Vercel, defina `ADMIN_USERNAME=1joaodev`, `APP_ACCESS_CODE` com pelo menos 32 caracteres aleatórios e `APP_SESSION_SECRET` com pelo menos 64 bytes aleatórios.
 
 ## Fluxo com interface própria
 
@@ -87,6 +89,12 @@ O usuário final vê apenas a interface própria do IPTV Flow. O site da FUTEX �
 
 - `GET /health`: health check público de liveness usado pelo Railway.
 - `GET /api/health`: estado autenticado do serviço e da automação.
+- `POST /api/auth/login`: valida uma conta local.
+- `POST /api/auth/register`: cria uma conta comum consumindo uma chave de acesso de uso único.
+- `POST /api/auth/validate`: valida se a conta ainda está ativa e retorna seu papel atual.
+- `GET /api/auth/keys` e `POST /api/auth/keys`: lista e gera chaves; somente proprietário e administradores.
+- `POST /api/auth/keys/:id/revoke`: revoga uma chave ainda não utilizada.
+- `GET /api/auth/users` e `POST /api/auth/users/role`: lista contas e promove/rebaixa administradores; somente proprietário.
 - `GET /api/diagnostics/futex`: diagnóstico de leitura do site, sem enviar formulários.
 - `POST /api/test-requests`: inicia uma solicitação com `{ "customerName", "contact", "device", "brand" }`.
 - `GET /api/test-requests`: lista o histórico persistido.
@@ -141,4 +149,4 @@ node --test tests/proxy.test.js
 
 Os testes automatizados cobrem a extração de campos com formatos diferentes. Eles não substituem uma execução real no site. A FUTEX pode alterar textos, botões, frames ou o formato das mensagens; use o diagnóstico e valide o atendimento antes de ativar o processamento real.
 
-O histórico é persistido em JSON no volume do worker; nome, telefone e credenciais são criptografados com AES-256-GCM antes da gravação. Registros antigos sem criptografia são migrados automaticamente na próxima persistência. Para vários administradores, grande volume, auditoria ou múltiplas réplicas, migre o armazenamento para PostgreSQL e implemente autenticação individual. Não compartilhe o token de administrador.
+O histórico é persistido em JSON no volume do worker; nome, telefone e credenciais são criptografados com AES-256-GCM antes da gravação. Registros antigos sem criptografia são migrados automaticamente na próxima persistência. As contas e chaves ficam em `auth.json`: senhas usam scrypt, chaves usam HMAC-SHA256 e cada chave pode ser resgatada uma única vez. A chave é mostrada somente no momento da geração; depois, a interface exibe apenas um prefixo. Administradores podem gerar e revogar chaves; somente o proprietário pode promover ou rebaixar administradores. Mantenha uma única réplica do worker para preservar as garantias de uso único e gravação serializada. Para alta disponibilidade e múltiplas réplicas, migre o armazenamento para PostgreSQL.

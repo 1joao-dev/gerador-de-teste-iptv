@@ -49,6 +49,8 @@ PORT=8787
 DATA_DIR=/data
 DATA_ENCRYPTION_KEY=chave-hexadecimal-de-64-caracteres
 API_TOKEN=token-aleatorio-longo
+OWNER_USERNAME=1joaodev
+AUTH_KEY_PEPPER=segredo-estavel-com-pelo-menos-32-caracteres
 FUTEX_URL=https://futex.com.br/teste/
 FUTEX_AUTOMATION_ENABLED=false
 FUTEX_HEADLESS=true
@@ -57,7 +59,7 @@ MAX_ACTIVE_SESSIONS=1
 MAX_SESSION_MINUTES=30
 ```
 
-Gere duas chaves independentes com `openssl rand -hex 32`: uma para `API_TOKEN` (use o mesmo valor em `WORKER_API_TOKEN` na Vercel) e outra para `DATA_ENCRYPTION_KEY`. No Windows PowerShell, use `[Convert]::ToHexString([Security.Cryptography.RandomNumberGenerator]::GetBytes(32))` para cada chave. Esta segunda chave criptografa nome, telefone e credenciais no histórico persistido. Guarde-a com segurança e nunca a troque enquanto houver dados salvos. Mantenha `FUTEX_AUTOMATION_ENABLED=false` até executar o diagnóstico e validar o fluxo real.
+Gere uma chave para `API_TOKEN` e use o mesmo valor em `WORKER_API_TOKEN` na Vercel; gere outra para `DATA_ENCRYPTION_KEY` e uma terceira para `AUTH_KEY_PEPPER`. Use `openssl rand -hex 32` para cada uma. No Windows PowerShell, use `[Convert]::ToHexString([Security.Cryptography.RandomNumberGenerator]::GetBytes(32))`. `DATA_ENCRYPTION_KEY` protege nome, telefone e credenciais no histórico. `AUTH_KEY_PEPPER` protege os hashes das chaves de acesso; mantenha-o estável enquanto houver chaves não resgatadas. Defina `OWNER_USERNAME=1joaodev` e mantenha-o igual a `ADMIN_USERNAME` na Vercel. Mantenha `FUTEX_AUTOMATION_ENABLED=false` até executar o diagnóstico e validar o fluxo real.
 
 ## Desenvolvimento local
 

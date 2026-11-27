@@ -32,7 +32,7 @@ export default async function handler(req, res) {
   const urlPath = new URL(req.url || "/", "http://localhost");
   const route = queryPath || urlPath.searchParams.get("path") || "";
   const normalizedRoute = route.startsWith("/") ? route : "/" + route;
-  if (normalizedRoute === "/api/diagnostics/futex" && session.role !== "admin") {
+  if (normalizedRoute === "/api/diagnostics/futex" && !["owner", "admin"].includes(session.role)) {
     return res.status(403).json({ message: "Apenas administradores podem executar diagnósticos." });
   }
 

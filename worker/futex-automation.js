@@ -260,7 +260,8 @@ export async function inspectFutexPage() {
     await page.waitForTimeout(1_000);
 
     const initialText = await visibleText(page);
-    if (!/como posso.{0,30}chamar|qual(?: é)? o? seu nome/i.test(initialText)) {
+    const diagnosticChat = await readFutexConversation(diagnosticSession);
+    if (!/como posso.{0,30}chamar|qual(?: é)? o? seu nome|digite\s+(?:seu\s+)?nome/i.test(initialText)) {
       const startOptions = ["Fazer teste grátis", "Iniciar teste grátis", "Teste grátis", "Gerar teste", "Iniciar atendimento", "Atendimento"];
       for (const option of startOptions) {
         try {
@@ -379,6 +380,7 @@ export async function inspectFutexPage() {
       url: page.url(),
       title: await page.title(),
       checkedAt: new Date().toISOString(),
+      chat: diagnosticChat,
       frames,
     };
   } finally {
@@ -582,8 +584,9 @@ export async function startFutexSession(payload) {
 
     // O site pode abrir o atendimento automaticamente ou exigir o botão de teste.
     let scope = await findChatScope(page);
+    await waitForInitialChat({ page, scope, closed: false }, 20_000);
     let text = await visibleText(scope);
-    if (!/como posso te chamar/i.test(text)) {
+    if (!/como posso te chamar|digite\s+(?:seu\s+)?nome/i.test(text)) {
       const startOptions = ["Fazer teste grátis", "Iniciar teste grátis", "Teste grátis", "Gerar teste", "Iniciar atendimento", "Atendimento"];
       for (const option of startOptions) {
         try {

@@ -225,7 +225,14 @@ async function waitForAppStep(scope, previousText) {
 
   try {
     const text = await waitForText(scope, /conseguiu.{0,30}instalar|já instalou|instalou o (?:app|aplicativo)/i, 45_000);
-    const app = extractRecommendedApp(text);
+    const conversation = session
+      ? await readFutexConversation(session).catch(() => undefined)
+      : undefined;
+    const assistantTranscript = conversation?.chatMessages
+      .filter((item) => item.role === "assistant")
+      .map((item) => item.text)
+      .join("\\n") || "";
+    const app = extractRecommendedApp(assistantTranscript) || extractRecommendedApp(text);
     if (!/conseguiu.{0,30}instalar|já instalou|instalou o (?:app|aplicativo)/i.test(text)) {
       throw new Error("A FUTEX não apresentou a confirmação de instalação esperada.");
     }

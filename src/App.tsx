@@ -1069,6 +1069,7 @@ function App() {
                     </div>
                     <div className="profile-editor-actions">
                       <button className="secondary-button" type="button" onClick={() => setProfileDraft(profile)}>Descartar alterações</button>
+                      <button className="secondary-button" type="button" onClick={resetProfile}>Restaurar padrão</button>
                       {profileDraft.avatarDataUrl && <button className="secondary-button profile-remove-photo" type="button" onClick={() => setProfileDraft((current) => ({ ...current, avatarDataUrl: "" }))}><Trash2 size={14} /> Remover foto</button>}
                       <button className="primary-button" type="submit"><Check size={15} /> Salvar perfil</button>
                     </div>

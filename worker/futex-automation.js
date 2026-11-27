@@ -4,10 +4,13 @@ import { extractRecommendedApp, extractResult } from "./futex-parser.js";
 const FUTEX_URL = process.env.FUTEX_URL || "https://futex.com.br/teste/";
 const HEADLESS = process.env.FUTEX_HEADLESS !== "false";
 const CHAT_INPUT = [
+  'input[aria-label="Mensagem"]',
+  'textarea[aria-label="Mensagem"]',
   'input[placeholder*="mensagem" i]',
   'textarea[placeholder*="mensagem" i]',
   'input[placeholder*="digite" i]',
   'textarea[placeholder*="digite" i]',
+  'textarea',
   '[contenteditable="true"][data-placeholder*="mensagem" i]',
   '[contenteditable="true"]',
 ].join(", ");
@@ -38,6 +41,14 @@ async function visibleText(scope) {
         for (const message of messages) {
           const text = (message.innerText || message.textContent || "").trim();
           if (text) parts.push(text);
+        }
+        const controls = host.shadowRoot.querySelectorAll("input, textarea, [contenteditable='true']");
+        for (const control of controls) {
+          const placeholder = control.getAttribute("placeholder")
+            || control.getAttribute("data-placeholder")
+            || control.getAttribute("aria-label")
+            || "";
+          if (placeholder.trim()) parts.push(placeholder.trim());
         }
         visit(host.shadowRoot);
       }
@@ -72,6 +83,14 @@ async function waitForText(scope, expression, timeout = 25_000) {
             const text = (message.innerText || message.textContent || "").trim();
             if (text) parts.push(text);
           }
+          const controls = host.shadowRoot.querySelectorAll("input, textarea, [contenteditable='true']");
+          for (const control of controls) {
+            const placeholder = control.getAttribute("placeholder")
+              || control.getAttribute("data-placeholder")
+              || control.getAttribute("aria-label")
+              || "";
+            if (placeholder.trim()) parts.push(placeholder.trim());
+          }
           visit(host.shadowRoot);
         }
       };
@@ -82,6 +101,30 @@ async function waitForText(scope, expression, timeout = 25_000) {
     { timeout },
   );
   return visibleText(scope);
+}
+
+async function waitForInitialChat(session, timeout = 20_000) {
+  const startedAt = Date.now();
+  let latest = {
+    chatMessages: [],
+    chatOptions: [],
+    chatInputPlaceholder: "",
+    chatCanSend: false,
+    chatBotCount: 0,
+  };
+
+  while (Date.now() - startedAt < timeout) {
+    latest = await readFutexConversation(session).catch(() => latest);
+    const transcript = latest.chatMessages.map((item) => item.text).join("\n");
+    const hasWelcomeMessage = /como posso te chamar|teste gr[aá]tis|boa (?:tarde|noite|dia)/i.test(transcript);
+    const hasNamePrompt = /digite\s+(?:seu\s+)?nome/i.test(latest.chatInputPlaceholder || "");
+    const hasOptions = Array.isArray(latest.chatOptions) && latest.chatOptions.length > 0;
+
+    if (hasWelcomeMessage || hasNamePrompt || hasOptions) return latest;
+    await session.page.waitForTimeout(500).catch(() => undefined);
+  }
+
+  return latest;
 }
 
 async function clickChoice(scope, label) {
@@ -212,7 +255,9 @@ export async function inspectFutexPage() {
 
   try {
     await page.goto(FUTEX_URL, { waitUntil: "domcontentloaded", timeout: 35_000 });
-    await page.waitForTimeout(3_000);
+    const diagnosticSession = { page, scope: page, closed: false };
+    await waitForInitialChat(diagnosticSession, 20_000);
+    await page.waitForTimeout(1_000);
 
     const initialText = await visibleText(page);
     if (!/como posso.{0,30}chamar|qual(?: é)? o? seu nome/i.test(initialText)) {
@@ -357,6 +402,7 @@ export async function startFutexManualSession() {
     const input = scope.locator('textarea[aria-label="Mensagem"], textarea').last();
     await input.waitFor({ state: "visible", timeout: 30_000 });
     session.scope = scope;
+    await waitForInitialChat(session, 20_000);
     await page.waitForTimeout(500);
     const chat = await readFutexConversation(session);
     const { result: parsedResult, ...conversation } = chat;
@@ -550,7 +596,7 @@ export async function startFutexSession(payload) {
     }
 
     scope = await findChatScope(page);
-    await waitForText(scope, /como posso.{0,30}chamar|qual(?: é)? o? seu nome|qual é o seu nome/i, 30_000);
+    await waitForText(scope, /como posso.{0,30}chamar|qual(?: é)? o? seu nome|qual é o seu nome|digite\s+(?:seu\s+)?nome/i, 30_000);
     await sendChatMessage(scope, payload.customerName);
 
     await waitForText(scope, /qual.{0,50}(?:whatsapp|celular|telefone)|(?:whatsapp|celular|telefone).{0,50}(?:ddd|n[uú]mero)/i, 25_000);

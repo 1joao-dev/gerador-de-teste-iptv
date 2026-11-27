@@ -23,6 +23,7 @@ export default async function handler(req, res) {
   if (appAccessCode.length < 32) {
     return res.status(503).json({ message: "Configure APP_ACCESS_CODE na Vercel com pelo menos 32 caracteres aleatórios." });
   }
+
   const expectedCodeBuffer = Buffer.from(appAccessCode);
   const providedCodeBuffer = Buffer.from(String(providedCode));
   const validAccessCode = expectedCodeBuffer.length === providedCodeBuffer.length
@@ -39,11 +40,15 @@ export default async function handler(req, res) {
     });
   }
 
-  const segments = Array.isArray(req.query?.path)
+  const queryPath = typeof req.query?.path === "string"
     ? req.query.path
-    : [req.query?.path].filter(Boolean);
-  const route = "/" + segments.map((segment) => String(segment)).join("/");
-  const allowed = allowedRoutes.some((item) => item.method === req.method && item.pattern.test(route));
+    : Array.isArray(req.query?.path) && req.query.path.length === 1
+      ? req.query.path[0]
+      : "";
+  const urlPath = new URL(req.url || "/", "http://localhost");
+  const route = queryPath || urlPath.searchParams.get("path") || "";
+  const normalizedRoute = route.startsWith("/") ? route : "/" + route;
+  const allowed = allowedRoutes.some((item) => item.method === req.method && item.pattern.test(normalizedRoute));
   if (!allowed) return res.status(404).json({ message: "Rota não encontrada." });
 
   let target;
@@ -53,7 +58,7 @@ export default async function handler(req, res) {
     if (process.env.NODE_ENV === "production" && base.protocol !== "https:") {
       throw new Error("O worker deve usar HTTPS em produção.");
     }
-    target = new URL(route, base.origin);
+    target = new URL(normalizedRoute, base.origin);
   } catch {
     return res.status(500).json({ message: "WORKER_API_URL inválida. Informe a URL pública HTTPS do worker." });
   }

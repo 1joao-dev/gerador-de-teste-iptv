@@ -5,7 +5,7 @@ Painel web mobile-first para iniciar e acompanhar solicitações do atendimento 
 ## Estrutura
 
 - `src/`: interface React + TypeScript + Vite.
-- `api/worker/[...path].js`: proxy server-side da Vercel. Mantém a chave do worker fora do navegador.
+- `api/worker.js`: proxy server-side da Vercel. Mantém a chave do worker fora do navegador.
 - `worker/`: API Node.js, Playwright, parser dinâmico, testes e Dockerfile.
 
 ## Fluxo de atendimento
@@ -17,7 +17,7 @@ O formato de credenciais não é fixo: o parser suporta rótulos dinâmicos como
 ## Arquitetura
 
 - **Painel:** Vercel (Vite + React).
-- **Proxy:** Vercel Function em `api/worker/[...path].js`.
+- **Proxy:** Vercel Function em `api/worker.js`, com rota fixa e caminho da API encaminhado por query string.
 - **Automação:** Playwright em um servidor persistente, recomendado Railway com Docker.
 - **Histórico:** arquivo JSON em volume persistente do worker (`DATA_DIR=/data`), com nome, telefone e credenciais criptografados com AES-256-GCM.
 

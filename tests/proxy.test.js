@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import handler from "../api/worker/[...path].js";
+import handler from "../api/worker.js";
 
 function mockResponse() {
   return {
@@ -39,12 +39,12 @@ test("proxy exige código privado do painel antes de encaminhar chamadas", async
     delete process.env.WORKER_API_TOKEN;
 
     const missing = mockResponse();
-    await handler({ method: "GET", query: { path: ["api", "health"] }, headers: {} }, missing);
+    await handler({ method: "GET", query: { path: "/api/health" }, headers: {} }, missing);
     assert.equal(missing.statusCode, 503);
 
     process.env.APP_ACCESS_CODE = "painel-secreto-de-teste-com-mais-de-32-caracteres";
     const denied = mockResponse();
-    await handler({ method: "GET", query: { path: ["api", "health"] }, headers: { "x-app-access-code": "errado" } }, denied);
+    await handler({ method: "GET", query: { path: "/api/health" }, headers: { "x-app-access-code": "errado" } }, denied);
     assert.equal(denied.statusCode, 401);
   } finally {
     if (original.APP_ACCESS_CODE === undefined) delete process.env.APP_ACCESS_CODE;
@@ -83,7 +83,7 @@ test("proxy encaminha apenas rotas permitidas e mantém token do worker no servi
     const response = mockResponse();
     await handler({
       method: "GET",
-      query: { path: ["api", "health"] },
+      query: { path: "/api/health" },
       headers: { "x-app-access-code": "painel-secreto-de-teste-com-mais-de-32-caracteres" },
     }, response);
 
@@ -94,7 +94,7 @@ test("proxy encaminha apenas rotas permitidas e mantém token do worker no servi
     const chatResponse = mockResponse();
     await handler({
       method: "POST",
-      query: { path: ["api", "test-requests", "123e4567-e89b-12d3-a456-426614174000", "chat"] },
+      query: { path: "/api/test-requests/123e4567-e89b-12d3-a456-426614174000/chat" },
       headers: { "x-app-access-code": "painel-secreto-de-teste-com-mais-de-32-caracteres" },
       body: { message: "João" },
     }, chatResponse);
@@ -106,10 +106,40 @@ test("proxy encaminha apenas rotas permitidas e mantém token do worker no servi
     const blocked = mockResponse();
     await handler({
       method: "GET",
-      query: { path: ["admin", "secrets"] },
+      query: { path: "/admin/secrets" },
       headers: { "x-app-access-code": "painel-secreto-de-teste-com-mais-de-32-caracteres" },
     }, blocked);
     assert.equal(blocked.statusCode, 404);
+  } finally {
+    for (const key of ["APP_ACCESS_CODE", "WORKER_API_URL", "WORKER_API_TOKEN", "NODE_ENV"]) {
+      if (original[key] === undefined) delete process.env[key];
+      else process.env[key] = original[key];
+    }
+    globalThis.fetch = original.fetch;
+  }
+});
+
+test("proxy aceita a rota recebida pela query string da função fixa", async () => {
+  const original = {
+    APP_ACCESS_CODE: process.env.APP_ACCESS_CODE,
+    WORKER_API_URL: process.env.WORKER_API_URL,
+    WORKER_API_TOKEN: process.env.WORKER_API_TOKEN,
+    NODE_ENV: process.env.NODE_ENV,
+    fetch: globalThis.fetch,
+  };
+  try {
+    process.env.APP_ACCESS_CODE = "painel-secreto-de-teste-com-mais-de-32-caracteres";
+    process.env.WORKER_API_URL = "https://worker.example";
+    process.env.WORKER_API_TOKEN = "token-interno-do-worker";
+    process.env.NODE_ENV = "production";
+    globalThis.fetch = async () => new Response(JSON.stringify({ status: "ok" }), { status: 200 });
+    const response = mockResponse();
+    await handler({
+      method: "GET",
+      url: "/api/worker?path=%2Fapi%2Fhealth",
+      headers: { "x-app-access-code": "painel-secreto-de-teste-com-mais-de-32-caracteres" },
+    }, response);
+    assert.equal(response.statusCode, 200);
   } finally {
     for (const key of ["APP_ACCESS_CODE", "WORKER_API_URL", "WORKER_API_TOKEN", "NODE_ENV"]) {
       if (original[key] === undefined) delete process.env[key];

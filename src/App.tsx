@@ -238,7 +238,9 @@ function App() {
     const headers = new Headers(options.headers || {});
     if (appAccessCode) headers.set("x-app-access-code", appAccessCode);
     if (options.body && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
-    return fetch(API_BASE_URL + path, { ...options, headers, cache: "no-store" });
+    const requestUrl = new URL(API_BASE_URL, window.location.origin);
+    requestUrl.searchParams.set("path", path);
+    return fetch(requestUrl.toString(), { ...options, headers, cache: "no-store" });
   }
 
   async function checkWorkerHealth(silent = false) {

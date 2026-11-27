@@ -203,7 +203,12 @@ app.use("/api", async (req, res, next) => {
   if (["/api/auth/login", "/api/auth/register", "/api/auth/validate"].includes(route)) return next();
 
   const username = String(req.get("x-iptvflow-user") || "").trim().toLowerCase();
-  if (!username) return res.status(401).json({ message: "Sessão inválida." });
+  if (!username) {
+    // Backward compatibility for the existing owner-only Vercel proxy during rollout.
+    // This path is reachable only after the private WORKER_API_TOKEN has been verified.
+    req.iptvflowIdentity = { username: authStore.ownerUsername, role: "owner" };
+    return next();
+  }
 
   if (username === authStore.ownerUsername) {
     req.iptvflowIdentity = { username, role: "owner" };

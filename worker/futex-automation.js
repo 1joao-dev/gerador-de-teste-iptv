@@ -211,7 +211,7 @@ function extractGuideUrl(scope) {
   }).catch(() => undefined);
 }
 
-async function waitForAppStep(scope, previousText) {
+async function waitForAppStep(scope, previousText, session) {
   if (previousText) {
     await scope.waitForFunction(
       (previous) => (document.body?.innerText || "") !== previous,
@@ -667,7 +667,7 @@ export async function startFutexSession(payload) {
         await clickChoice(scope, payload.brand);
       }
     }
-    let result = await waitForAppStep(scope);
+    let result = await waitForAppStep(scope, undefined, session);
 
     // Modo automático: avança no chatbot sem abrir a FUTEX no aparelho do usuário.
     // Só responde "Sim" quando o usuário habilitou essa opção no próprio IPTV Flow.
@@ -713,7 +713,7 @@ export async function continueFutexSession(session, installed) {
 
   const previousText = await visibleText(scope);
   await clickChoiceAny(scope, ["Não consegui", "Não consegui instalar", "Ainda não", "Não"]);
-  const result = await waitForAppStep(scope, previousText);
+  const result = await waitForAppStep(scope, previousText, session);
   if (result.status === "completed") {
     await closeFutexSession(session);
     return result;

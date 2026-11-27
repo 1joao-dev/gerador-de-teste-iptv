@@ -2419,3 +2419,9 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
     flex-wrap: wrap;
   }
 }
+
+@media (max-width: 620px) {
+  .mobile-bottom-nav.mobile-bottom-nav-admin {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+}

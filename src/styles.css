@@ -2425,3 +2425,53 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
     grid-template-columns: repeat(5, minmax(0, 1fr));
   }
 }
+
+
+/* Account password settings */
+.password-settings-panel {
+  min-width: 0;
+}
+.password-change-form {
+  display: grid;
+  gap: 14px;
+  padding-top: 18px;
+}
+.password-change-form .profile-field {
+  display: grid;
+  gap: 8px;
+}
+.password-change-form .profile-field input {
+  width: 100%;
+}
+.password-change-form .password-strength {
+  margin-top: -2px;
+}
+.password-change-footer {
+  display: grid;
+  gap: 13px;
+  margin-top: 2px;
+}
+.password-change-footer > span {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  color: #8995ae;
+  font-size: 8px;
+  line-height: 1.55;
+}
+.password-change-footer > span svg {
+  flex: 0 0 auto;
+  color: #68d8b1;
+}
+.password-change-footer .primary-button {
+  justify-content: center;
+  min-height: 42px;
+}
+@media (max-width: 680px) {
+  .password-settings-panel {
+    padding: 16px;
+  }
+  .password-change-form {
+    gap: 12px;
+  }
+}

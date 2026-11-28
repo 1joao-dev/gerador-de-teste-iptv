@@ -200,7 +200,7 @@ app.use("/api", (req, res, next) => {
 
 app.use("/api", async (req, res, next) => {
   const route = String(req.originalUrl || "").split("?")[0];
-  if (["/api/auth/login", "/api/auth/register", "/api/auth/validate"].includes(route)) return next();
+  if (["/api/auth/login", "/api/auth/owner-login", "/api/auth/register", "/api/auth/validate"].includes(route)) return next();
 
   const username = String(req.get("x-iptvflow-user") || "").trim().toLowerCase();
   if (!username) {
@@ -224,6 +224,19 @@ app.use("/api", async (req, res, next) => {
     return next();
   } catch {
     return res.status(503).json({ message: "Não foi possível validar sua conta no momento." });
+  }
+});
+
+app.post("/api/auth/owner-login", async (req, res) => {
+  const password = typeof req.body?.password === "string" ? req.body.password : "";
+  if (!password || password.length > 128) {
+    return res.status(400).json({ message: "Informe uma senha válida." });
+  }
+  try {
+    const result = await authStore.authenticateOwner({ password });
+    return res.status(200).json(result);
+  } catch {
+    return res.status(503).json({ message: "Não foi possível validar a senha do proprietário." });
   }
 });
 
@@ -262,6 +275,29 @@ app.post("/api/auth/validate", async (req, res) => {
     return res.status(200).json({ authenticated: true, user });
   } catch {
     return res.status(503).json({ message: "Não foi possível validar a sessão." });
+  }
+});
+
+app.post("/api/auth/password", async (req, res) => {
+  const identity = requestIdentity(req);
+  const currentPassword = typeof req.body?.currentPassword === "string" ? req.body.currentPassword : "";
+  const newPassword = typeof req.body?.newPassword === "string" ? req.body.newPassword : "";
+  if (!currentPassword || !newPassword || currentPassword.length > 128 || newPassword.length > 128) {
+    return res.status(400).json({ message: "Informe a senha atual e uma nova senha válida." });
+  }
+  try {
+    await authStore.changePassword({
+      username: identity.username,
+      role: identity.role,
+      currentPassword,
+      newPassword,
+      initialOwnerPassword: identity.role === "owner" && typeof req.body?.initialOwnerPassword === "string"
+        ? req.body.initialOwnerPassword
+        : "",
+    });
+    return res.status(200).json({ changed: true });
+  } catch (error) {
+    return res.status(error?.statusCode || 500).json({ message: error?.message || "Não foi possível alterar a senha." });
   }
 });
 

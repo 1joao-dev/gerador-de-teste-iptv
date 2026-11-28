@@ -25,6 +25,6 @@ jobs:
       - name: Test dynamic FUTEX parser
         run: npm test --prefix worker
       - name: Test secure Vercel proxy
-        run: node --test tests/proxy.test.js
+        run: node --test tests/proxy.test.js tests/password-change.test.js
       - name: Check worker and Vercel proxy syntax
         run: npm run check --prefix worker && node --check api/worker.js && node --check api/auth/login.js && node --check api/auth/password.js

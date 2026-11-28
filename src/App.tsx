@@ -440,7 +440,7 @@ function App() {
   }, [requests, searchTerm]);
 
   function navigate(nextPage: Page) {
-    if (nextPage === "access" && userRole !== "admin") {
+    if ((nextPage === "access" || nextPage === "clients") && userRole !== "admin") {
       setToast("Esta área é exclusiva para administradores.");
       return;
     }
@@ -1175,7 +1175,7 @@ function App() {
                 <button className="auth-mode-switch" type="button" onClick={() => { setAuthMode("register"); setLoginError(""); }}>
                   Não tem uma conta? <strong>Criar conta com chave</strong>
                 </button>
-                <div className="auth-security-note"><ShieldCheck size={15} /><span>Sua senha nunca é salva. A sessão normal dura 4 horas.</span></div>
+                <div className="auth-security-note"><ShieldCheck size={15} /><span>{rememberLogin ? "Sua senha nunca é salva. Sessão persistente por até 30 dias." : "Sua senha nunca é salva. A sessão normal dura 4 horas."}</span></div>
               </form>
             ) : (
               <form className="auth-card" onSubmit={handleRegister}>

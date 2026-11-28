@@ -46,7 +46,8 @@ import {
 } from "lucide-react";
 import { API_BASE_URL } from "./config";
 
-type Page = "overview" | "new" | "history" | "access" | "settings";
+type ClientPlanCode = "24h" | "7d" | "30d" | "90d" | "1y" | "lifetime";
+type Page = "overview" | "new" | "history" | "clients" | "access" | "settings";
 type RequestStatus = "draft" | "queued" | "running" | "awaiting_app" | "needs_human" | "completed" | "failed";
 
 type AccessDetail = { label: string; value: string };
@@ -70,6 +71,7 @@ type AccessKeyItem = {
   redeemedBy: string | null;
   revokedAt: string | null;
   status: "active" | "used" | "expired" | "revoked";
+  planCode?: ClientPlanCode;
 };
 
 type ManagedUserItem = {
@@ -79,6 +81,47 @@ type ManagedUserItem = {
   createdAt: string;
   lastLoginAt: string | null;
 };
+
+type ClientItem = ManagedUserItem & {
+  planCode: ClientPlanCode;
+  planExpiresAt: string | null;
+  planStatus: "active" | "expired";
+};
+
+const CLIENT_PLANS: { code: ClientPlanCode; label: string }[] = [
+  { code: "24h", label: "24 horas" },
+  { code: "7d", label: "7 dias" },
+  { code: "30d", label: "30 dias" },
+  { code: "90d", label: "90 dias" },
+  { code: "1y", label: "1 ano" },
+  { code: "lifetime", label: "Vitalício" },
+];
+
+const REMEMBERED_LOGIN_KEY = "iptvflow.remembered-username.v1";
+
+function readRememberedUsername(): string {
+  try {
+    return typeof window !== "undefined"
+      ? window.localStorage.getItem(REMEMBERED_LOGIN_KEY) || ""
+      : "";
+  } catch {
+    return "";
+  }
+}
+
+function saveRememberedUsername(username: string, remember: boolean) {
+  try {
+    if (typeof window === "undefined") return;
+    if (remember) window.localStorage.setItem(REMEMBERED_LOGIN_KEY, username);
+    else window.localStorage.removeItem(REMEMBERED_LOGIN_KEY);
+  } catch {
+    // A sessão segura continua funcionando mesmo se o navegador bloquear o armazenamento local.
+  }
+}
+
+function clientPlanLabel(code?: string): string {
+  return CLIENT_PLANS.find((plan) => plan.code === code)?.label || "Vitalício";
+}
 
 const PROFILE_STORAGE_KEY = "iptvflow.admin-profile.v1";
 
@@ -290,13 +333,19 @@ function App() {
   const [accessKeysLoading, setAccessKeysLoading] = useState(false);
   const [keyLabel, setKeyLabel] = useState("");
   const [keyExpiry, setKeyExpiry] = useState("30");
+  const [keyPlan, setKeyPlan] = useState<ClientPlanCode>("30d");
+  const [clients, setClients] = useState<ClientItem[]>([]);
+  const [clientsLoading, setClientsLoading] = useState(false);
+  const [clientPlanDrafts, setClientPlanDrafts] = useState<Record<string, ClientPlanCode>>({});
+  const [clientActionLoading, setClientActionLoading] = useState("");
   const [keySubmitting, setKeySubmitting] = useState(false);
   const [generatedKey, setGeneratedKey] = useState("");
   const [managedUsers, setManagedUsers] = useState<ManagedUserItem[]>([]);
   const [managedUsersLoading, setManagedUsersLoading] = useState(false);
   const [userActionLoading, setUserActionLoading] = useState("");
   const [authMode, setAuthMode] = useState<"login" | "register">("login");
-  const [loginUsername, setLoginUsername] = useState("1joaodev");
+  const [loginUsername, setLoginUsername] = useState(() => readRememberedUsername() || "1joaodev");
+  const [rememberLogin, setRememberLogin] = useState(() => Boolean(readRememberedUsername()));
   const [profile, setProfile] = useState<AdminProfile>(() => readAdminProfile());
   const [profileDraft, setProfileDraft] = useState<AdminProfile>(() => readAdminProfile());
   const [loginPassword, setLoginPassword] = useState("");
@@ -357,6 +406,7 @@ function App() {
     void refreshHistory(true);
     if (userRole === "admin") {
       void loadAccessKeys(true);
+      void loadClients(true);
       if (isOwner) void loadManagedUsers(true);
     }
     const interval = window.setInterval(() => { void checkWorkerHealth(true); }, 30_000);
@@ -399,6 +449,7 @@ function App() {
       void loadAccessKeys(true);
       if (isOwner) void loadManagedUsers(true);
     }
+    if (nextPage === "clients") void loadClients(true);
     setPage(nextPage);
     setMobileMenuOpen(false);
     setSelectedRequest(null);
@@ -998,7 +1049,10 @@ function App() {
     { id: "overview" as const, label: "Visão geral", icon: LayoutDashboard },
     { id: "new" as const, label: "Novo teste", icon: Plus },
     { id: "history" as const, label: "Histórico", icon: History },
-    ...(userRole === "admin" ? [{ id: "access" as const, label: "Chaves de acesso", icon: KeyRound }] : []),
+    ...(userRole === "admin" ? [
+      { id: "clients" as const, label: "Clientes", icon: Users },
+      { id: "access" as const, label: "Chaves de acesso", icon: KeyRound },
+    ] : []),
     { id: "settings" as const, label: "Configurações", icon: Settings2 },
   ];
   const registerPasswordPolicy = getPasswordPolicy(registerPassword);

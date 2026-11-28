@@ -161,3 +161,82 @@ test("owner can replace the initial server password and authenticate with the ne
   assert.equal(persisted.ownerCredentials.passwordHash.includes("SenhaNova456!"), false);
   assert.equal(persisted.ownerCredentials.passwordHash.includes("SenhaInicial123!"), false);
 });
+
+
+test("new access keys assign the selected subscription plan when the client activates", async (t) => {
+  const store = await createStore(t);
+  const generated = await store.createAccessKey({
+    actor: { username: "1joaodev", role: "owner" },
+    expiresInDays: 30,
+    planCode: "7d",
+  });
+
+  assert.equal((await store.listAccessKeys())[0].planCode, "7d");
+  const client = await store.register({
+    username: "clienteplano",
+    password: "SenhaForte123!",
+    accessKey: generated.key,
+  });
+
+  assert.equal(client.planCode, "7d");
+  assert.ok(Date.parse(client.planExpiresAt) > Date.now());
+  assert.equal(client.planStatus, "active");
+  assert.equal((await store.listClients())[0].username, "clienteplano");
+});
+
+test("staff can change a client plan and expired plans cannot log in or keep a session", async (t) => {
+  const store = await createStore(t);
+  const generated = await store.createAccessKey({
+    actor: { username: "1joaodev", role: "owner" },
+    expiresInDays: null,
+    planCode: "30d",
+  });
+  await store.register({
+    username: "clienteplano",
+    password: "SenhaForte123!",
+    accessKey: generated.key,
+  });
+
+  const updated = await store.setClientPlan({
+    username: "clienteplano",
+    planCode: "90d",
+    actor: { username: "admin01", role: "admin" },
+  });
+  assert.equal(updated.planCode, "90d");
+  assert.ok(Date.parse(updated.planExpiresAt) > Date.now());
+
+  await assert.rejects(
+    store.setClientPlan({
+      username: "clienteplano",
+      planCode: "7d",
+      actor: { username: "clienteplano", role: "user" },
+    }),
+    /Somente proprietários e administradores/,
+  );
+
+  const clientRecord = store.state.users.find((item) => item.username === "clienteplano");
+  clientRecord.planExpiresAt = new Date(Date.now() - 60_000).toISOString();
+  await store.persist();
+
+  const publicClient = await store.getUser("clienteplano");
+  assert.equal(publicClient.planStatus, "expired");
+  assert.equal(await store.authenticate({ username: "clienteplano", password: "SenhaForte123!" }), null);
+  assert.equal(await store.validateSession("clienteplano"), null);
+});
+
+test("lifetime subscription never receives an expiration date", async (t) => {
+  const store = await createStore(t);
+  const generated = await store.createAccessKey({
+    actor: { username: "1joaodev", role: "owner" },
+    expiresInDays: null,
+    planCode: "lifetime",
+  });
+  const client = await store.register({
+    username: "clientelife",
+    password: "SenhaForte123!",
+    accessKey: generated.key,
+  });
+  assert.equal(client.planCode, "lifetime");
+  assert.equal(client.planExpiresAt, null);
+  assert.equal(client.planStatus, "active");
+});

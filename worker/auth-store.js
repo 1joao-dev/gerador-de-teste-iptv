@@ -131,6 +131,20 @@ export class AuthStore {
       if (error?.code !== "ENOENT") throw error;
       await this.persist();
     }
+    const ownerPasswordReset = process.env.OWNER_PASSWORD_RESET_ONCE;
+    if (ownerPasswordReset && this.state.ownerPasswordResetApplied !== true) {
+      if (!validatePassword(ownerPasswordReset)) {
+        throw new Error("A senha temporária de redefinição do proprietário não atende à política de segurança.");
+      }
+      this.state.ownerCredentials = {
+        username: this.ownerUsername,
+        ...(await hashPassword(ownerPasswordReset)),
+        updatedAt: new Date().toISOString(),
+      };
+      this.state.ownerPasswordResetApplied = true;
+      await this.persist();
+    }
+    delete process.env.OWNER_PASSWORD_RESET_ONCE;
     this.loaded = true;
   }
 

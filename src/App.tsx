@@ -1477,6 +1477,95 @@ function App() {
             </section>
           )}
 
+          {page === "clients" && userRole === "admin" && (
+            <section className="page-section">
+              <div className="page-heading">
+                <div>
+                  <div className="eyebrow"><Users size={13} /> GESTÃO DE ASSINATURAS</div>
+                  <h1>Clientes</h1>
+                  <p>Gerencie os planos, acompanhe os vencimentos e renove os acessos.</p>
+                </div>
+                <button className="secondary-button" type="button" onClick={() => void loadClients()}><RefreshCw size={14} /> Atualizar</button>
+              </div>
+
+              <div className="clients-summary-grid">
+                <article className="panel clients-summary-card">
+                  <span className="clients-summary-icon"><Users size={17} /></span>
+                  <small>Total de clientes</small>
+                  <strong>{clients.length}</strong>
+                </article>
+                <article className="panel clients-summary-card">
+                  <span className="clients-summary-icon summary-active"><CheckCircle2 size={17} /></span>
+                  <small>Planos ativos</small>
+                  <strong>{clients.filter((item) => item.status === "active" && item.planStatus === "active").length}</strong>
+                </article>
+                <article className="panel clients-summary-card">
+                  <span className="clients-summary-icon summary-expired"><Clock3 size={17} /></span>
+                  <small>Planos vencidos</small>
+                  <strong>{clients.filter((item) => item.planStatus === "expired").length}</strong>
+                </article>
+                <article className="panel clients-summary-card">
+                  <span className="clients-summary-icon summary-lifetime"><ShieldCheck size={17} /></span>
+                  <small>Vitalícios</small>
+                  <strong>{clients.filter((item) => item.planCode === "lifetime").length}</strong>
+                </article>
+              </div>
+
+              <section className="panel clients-panel">
+                <div className="panel-heading">
+                  <div><h3>Base de clientes</h3><p>O plano começa a contar a partir da ativação da chave. Alterar o plano inicia um novo período a partir de agora.</p></div>
+                  <span className="access-panel-icon"><Users size={18} /></span>
+                </div>
+                {clientsLoading ? (
+                  <div className="access-empty"><LoaderCircle className="spin" size={18} /> Carregando clientes...</div>
+                ) : clients.length === 0 ? (
+                  <div className="access-empty"><Users size={22} /><strong>Nenhum cliente cadastrado</strong><span>Gere uma chave na aba Chaves de acesso para começar.</span></div>
+                ) : (
+                  <div className="client-list">
+                    {clients.map((item) => (
+                      <article className="client-row" key={item.username}>
+                        <div className="client-identity">
+                          <div className="access-user-avatar"><UserRound size={17} /></div>
+                          <div className="client-identity-copy">
+                            <strong>@{item.username}</strong>
+                            <small>Cadastro em {new Date(item.createdAt).toLocaleDateString("pt-BR")}</small>
+                            <small>{item.lastLoginAt ? "Último acesso " + new Date(item.lastLoginAt).toLocaleDateString("pt-BR") : "Ainda não entrou"}</small>
+                          </div>
+                        </div>
+                        <div className="client-current-plan">
+                          <span>PLANO ATUAL</span>
+                          <strong>{clientPlanLabel(item.planCode)}</strong>
+                          <span className={"client-plan-status " + (item.planStatus === "expired" ? "is-expired" : "is-active")}>
+                            {item.planStatus === "expired" ? "Vencido" : "Ativo"}
+                          </span>
+                        </div>
+                        <div className="client-expiry">
+                          <span>VENCIMENTO</span>
+                          <strong>{item.planExpiresAt ? new Date(item.planExpiresAt).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }) : "Sem vencimento"}</strong>
+                        </div>
+                        <div className="client-plan-editor">
+                          <label className="profile-field">
+                            <span>Alterar plano</span>
+                            <select
+                              value={clientPlanDrafts[item.username] || item.planCode}
+                              onChange={(event) => setClientPlanDrafts((current) => ({ ...current, [item.username]: event.target.value as ClientPlanCode }))}
+                            >
+                              {CLIENT_PLANS.map((plan) => <option key={plan.code} value={plan.code}>{plan.label}</option>)}
+                            </select>
+                          </label>
+                          <button className="primary-button" type="button" disabled={clientActionLoading === item.username || (clientPlanDrafts[item.username] || item.planCode) === item.planCode} onClick={() => void updateClientPlan(item.username)}>
+                            {clientActionLoading === item.username ? <LoaderCircle className="spin" size={14} /> : <Check size={14} />}
+                            {clientActionLoading === item.username ? "Salvando..." : "Aplicar plano"}
+                          </button>
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                )}
+              </section>
+            </section>
+          )}
+
           {page === "access" && userRole === "admin" && (
             <section className="page-section">
               <div className="page-heading">

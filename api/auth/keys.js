@@ -22,6 +22,7 @@ export default async function handler(req, res) {
       body: req.method === "POST" ? {
         label: req.body?.label,
         expiresInDays: req.body?.expiresInDays === null ? null : Number(req.body?.expiresInDays ?? 30),
+        planCode: typeof req.body?.planCode === "string" ? req.body.planCode : "30d",
       } : undefined,
       identity: session,
     });

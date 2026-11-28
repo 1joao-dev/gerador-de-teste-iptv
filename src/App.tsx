@@ -634,6 +634,8 @@ function App() {
       setIsOwner(false);
       setAccessKeys([]);
       setManagedUsers([]);
+      setClients([]);
+      setClientPlanDrafts({});
       setGeneratedKey("");
       setAuthState("unauthenticated");
     }
@@ -1050,7 +1052,7 @@ function App() {
       });
       const result = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(result.message || "Não foi possível alterar o acesso.");
-      await loadManagedUsers(true);
+      await Promise.all([loadManagedUsers(true), loadClients(true)]);
       setToast(role === "admin" ? "Administrador autorizado." : "Permissões administrativas removidas.");
     } catch (error) {
       setToast(error instanceof Error ? error.message : "Falha ao alterar o acesso.");

@@ -1,4 +1,6 @@
 import {
+  ADMIN_SESSION_TTL_SECONDS,
+  REMEMBERED_SESSION_TTL_SECONDS,
   createUserSession,
   getAdminUsername,
   setAdminSessionCookie,
@@ -46,9 +48,10 @@ export default async function handler(req, res) {
     const role = result.data.user.role === "admin" ? "admin" : "user";
     let expiresAt = session.expiresAt;
     if (role !== session.role) {
-      const token = createUserSession(session.username, role);
-      setAdminSessionCookie(res, token);
-      expiresAt = Math.floor(Date.now() / 1000) + 4 * 60 * 60;
+      const token = createUserSession(session.username, role, session.remember);
+      setAdminSessionCookie(res, token, session.remember);
+      const ttl = session.remember ? REMEMBERED_SESSION_TTL_SECONDS : ADMIN_SESSION_TTL_SECONDS;
+      expiresAt = Math.floor(Date.now() / 1000) + ttl;
     }
     return res.status(200).json({
       authenticated: true,

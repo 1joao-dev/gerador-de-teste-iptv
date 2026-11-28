@@ -2475,3 +2475,232 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
     gap: 12px;
   }
 }
+
+
+/* Lembrar login sem armazenar a senha */
+.auth-remember-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 17px;
+  color: #aab3ca;
+  cursor: pointer;
+  user-select: none;
+}
+.auth-remember-option input {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  margin: 0;
+  accent-color: #9b7cff;
+  cursor: pointer;
+}
+.auth-remember-copy {
+  display: grid;
+  gap: 3px;
+}
+.auth-remember-copy strong {
+  color: #e4e5f3;
+  font-size: 10px;
+  font-weight: 750;
+}
+.auth-remember-copy small {
+  color: #77839f;
+  font-size: 9px;
+  line-height: 1.45;
+}
+
+/* Gestão de clientes e planos */
+.clients-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 13px;
+  margin-bottom: 18px;
+}
+.clients-summary-card {
+  position: relative;
+  display: grid;
+  min-width: 0;
+  gap: 8px;
+  padding: 17px;
+  background:
+    radial-gradient(circle at 100% 0%, rgba(137, 111, 255, .08), transparent 52%),
+    var(--panel);
+}
+.clients-summary-icon {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  color: #b9a7ff;
+  border: 1px solid rgba(155, 129, 255, .2);
+  border-radius: 11px;
+  background: rgba(137, 111, 255, .1);
+}
+.clients-summary-icon.summary-active {
+  color: #69dfb3;
+  border-color: rgba(69, 214, 160, .18);
+  background: rgba(69, 214, 160, .08);
+}
+.clients-summary-icon.summary-expired {
+  color: #f2bd65;
+  border-color: rgba(242, 189, 101, .18);
+  background: rgba(242, 189, 101, .08);
+}
+.clients-summary-icon.summary-lifetime {
+  color: #64d4e6;
+  border-color: rgba(86, 216, 232, .18);
+  background: rgba(86, 216, 232, .08);
+}
+.clients-summary-card > small {
+  color: var(--muted);
+  font-size: 10px;
+}
+.clients-summary-card > strong {
+  color: var(--text);
+  font-family: Manrope, sans-serif;
+  font-size: 25px;
+  font-weight: 850;
+  line-height: 1;
+}
+.clients-panel {
+  min-width: 0;
+  overflow: hidden;
+}
+.client-list {
+  display: grid;
+  margin-top: 8px;
+}
+.client-row {
+  display: grid;
+  grid-template-columns: minmax(150px, 1.2fr) minmax(100px, .7fr) minmax(130px, .9fr) minmax(220px, 1.35fr);
+  align-items: center;
+  gap: 18px;
+  padding: 17px 0;
+  border-top: 1px solid var(--line);
+}
+.client-identity {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 11px;
+}
+.client-identity-copy {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+.client-identity-copy strong {
+  overflow: hidden;
+  color: #e9eaf5;
+  font-size: 11px;
+  text-overflow: ellipsis;
+}
+.client-identity-copy small {
+  color: #77829c;
+  font-size: 9px;
+}
+.client-current-plan,
+.client-expiry {
+  display: grid;
+  min-width: 0;
+  gap: 6px;
+}
+.client-current-plan > span:first-child,
+.client-expiry > span {
+  color: #707b96;
+  font-size: 8px;
+  font-weight: 850;
+  letter-spacing: 1px;
+}
+.client-current-plan > strong,
+.client-expiry > strong {
+  color: #e2e5f2;
+  font-size: 10px;
+  font-weight: 750;
+}
+.client-expiry > strong {
+  overflow-wrap: anywhere;
+  line-height: 1.45;
+}
+.client-plan-status {
+  width: fit-content;
+  padding: 4px 7px;
+  border-radius: 99px;
+  font-size: 8px;
+  font-weight: 800;
+}
+.client-plan-status.is-active {
+  color: #75e0b8;
+  border: 1px solid rgba(69, 214, 160, .18);
+  background: rgba(69, 214, 160, .08);
+}
+.client-plan-status.is-expired {
+  color: #ffc477;
+  border: 1px solid rgba(242, 189, 101, .18);
+  background: rgba(242, 189, 101, .08);
+}
+.client-plan-editor {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 9px;
+}
+.client-plan-editor .profile-field {
+  min-width: 0;
+  margin: 0;
+}
+.client-plan-editor .profile-field select {
+  width: 100%;
+  min-height: 39px;
+}
+.client-plan-editor .primary-button {
+  min-height: 39px;
+  padding: 0 11px;
+  white-space: nowrap;
+  font-size: 9px;
+}
+@media (max-width: 1050px) {
+  .client-row {
+    grid-template-columns: minmax(150px, 1fr) minmax(100px, .7fr) minmax(130px, .8fr);
+  }
+  .client-plan-editor {
+    grid-column: 1 / -1;
+    justify-self: end;
+    width: min(430px, 100%);
+  }
+}
+@media (max-width: 680px) {
+  .clients-summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 9px;
+  }
+  .clients-summary-card {
+    padding: 13px;
+  }
+  .client-row {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 14px 10px;
+    padding: 16px 0;
+  }
+  .client-identity {
+    grid-column: 1 / -1;
+  }
+  .client-plan-editor {
+    grid-column: 1 / -1;
+    grid-template-columns: minmax(0, 1fr) auto;
+    width: 100%;
+  }
+  .client-plan-editor .primary-button {
+    min-height: 40px;
+  }
+}
+@media (max-width: 390px) {
+  .client-plan-editor {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .client-plan-editor .primary-button {
+    width: 100%;
+    justify-content: center;
+  }
+}

@@ -46,7 +46,8 @@ import {
 } from "lucide-react";
 import { API_BASE_URL } from "./config";
 
-type Page = "overview" | "new" | "history" | "access" | "settings";
+type ClientPlanCode = "24h" | "7d" | "30d" | "90d" | "1y" | "lifetime";
+type Page = "overview" | "new" | "history" | "clients" | "access" | "settings";
 type RequestStatus = "draft" | "queued" | "running" | "awaiting_app" | "needs_human" | "completed" | "failed";
 
 type AccessDetail = { label: string; value: string };
@@ -70,6 +71,7 @@ type AccessKeyItem = {
   redeemedBy: string | null;
   revokedAt: string | null;
   status: "active" | "used" | "expired" | "revoked";
+  planCode?: ClientPlanCode;
 };
 
 type ManagedUserItem = {
@@ -79,6 +81,47 @@ type ManagedUserItem = {
   createdAt: string;
   lastLoginAt: string | null;
 };
+
+type ClientItem = ManagedUserItem & {
+  planCode: ClientPlanCode;
+  planExpiresAt: string | null;
+  planStatus: "active" | "expired";
+};
+
+const CLIENT_PLANS: { code: ClientPlanCode; label: string }[] = [
+  { code: "24h", label: "24 horas" },
+  { code: "7d", label: "7 dias" },
+  { code: "30d", label: "30 dias" },
+  { code: "90d", label: "90 dias" },
+  { code: "1y", label: "1 ano" },
+  { code: "lifetime", label: "Vitalício" },
+];
+
+const REMEMBERED_LOGIN_KEY = "iptvflow.remembered-username.v1";
+
+function readRememberedUsername(): string {
+  try {
+    return typeof window !== "undefined"
+      ? window.localStorage.getItem(REMEMBERED_LOGIN_KEY) || ""
+      : "";
+  } catch {
+    return "";
+  }
+}
+
+function saveRememberedUsername(username: string, remember: boolean) {
+  try {
+    if (typeof window === "undefined") return;
+    if (remember) window.localStorage.setItem(REMEMBERED_LOGIN_KEY, username);
+    else window.localStorage.removeItem(REMEMBERED_LOGIN_KEY);
+  } catch {
+    // A sessão segura continua funcionando mesmo se o navegador bloquear o armazenamento local.
+  }
+}
+
+function clientPlanLabel(code?: string): string {
+  return CLIENT_PLANS.find((plan) => plan.code === code)?.label || "Vitalício";
+}
 
 const PROFILE_STORAGE_KEY = "iptvflow.admin-profile.v1";
 
@@ -290,13 +333,19 @@ function App() {
   const [accessKeysLoading, setAccessKeysLoading] = useState(false);
   const [keyLabel, setKeyLabel] = useState("");
   const [keyExpiry, setKeyExpiry] = useState("30");
+  const [keyPlan, setKeyPlan] = useState<ClientPlanCode>("30d");
+  const [clients, setClients] = useState<ClientItem[]>([]);
+  const [clientsLoading, setClientsLoading] = useState(false);
+  const [clientPlanDrafts, setClientPlanDrafts] = useState<Record<string, ClientPlanCode>>({});
+  const [clientActionLoading, setClientActionLoading] = useState("");
   const [keySubmitting, setKeySubmitting] = useState(false);
   const [generatedKey, setGeneratedKey] = useState("");
   const [managedUsers, setManagedUsers] = useState<ManagedUserItem[]>([]);
   const [managedUsersLoading, setManagedUsersLoading] = useState(false);
   const [userActionLoading, setUserActionLoading] = useState("");
   const [authMode, setAuthMode] = useState<"login" | "register">("login");
-  const [loginUsername, setLoginUsername] = useState("1joaodev");
+  const [loginUsername, setLoginUsername] = useState(() => readRememberedUsername() || "1joaodev");
+  const [rememberLogin, setRememberLogin] = useState(() => Boolean(readRememberedUsername()));
   const [profile, setProfile] = useState<AdminProfile>(() => readAdminProfile());
   const [profileDraft, setProfileDraft] = useState<AdminProfile>(() => readAdminProfile());
   const [loginPassword, setLoginPassword] = useState("");
@@ -357,6 +406,7 @@ function App() {
     void refreshHistory(true);
     if (userRole === "admin") {
       void loadAccessKeys(true);
+      void loadClients(true);
       if (isOwner) void loadManagedUsers(true);
     }
     const interval = window.setInterval(() => { void checkWorkerHealth(true); }, 30_000);
@@ -390,7 +440,7 @@ function App() {
   }, [requests, searchTerm]);
 
   function navigate(nextPage: Page) {
-    if (nextPage === "access" && userRole !== "admin") {
+    if ((nextPage === "access" || nextPage === "clients") && userRole !== "admin") {
       setToast("Esta área é exclusiva para administradores.");
       return;
     }
@@ -399,6 +449,7 @@ function App() {
       void loadAccessKeys(true);
       if (isOwner) void loadManagedUsers(true);
     }
+    if (nextPage === "clients") void loadClients(true);
     setPage(nextPage);
     setMobileMenuOpen(false);
     setSelectedRequest(null);
@@ -433,12 +484,13 @@ function App() {
         method: "POST",
         credentials: "same-origin",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username: loginUsername.trim(), password: loginPassword }),
+        body: JSON.stringify({ username: loginUsername.trim(), password: loginPassword, rememberMe: rememberLogin }),
         cache: "no-store",
       });
       const result = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(result.message || "Não foi possível autenticar.");
       const username = result.user?.username || loginUsername.trim() || "admin";
+      saveRememberedUsername(username, rememberLogin);
       const isOwnerAccount = result.user?.role === "owner";
       const role = result.user?.role === "user" ? "user" : "admin";
       setAdminUsername(username);
@@ -582,6 +634,8 @@ function App() {
       setIsOwner(false);
       setAccessKeys([]);
       setManagedUsers([]);
+      setClients([]);
+      setClientPlanDrafts({});
       setGeneratedKey("");
       setAuthState("unauthenticated");
     }
@@ -872,6 +926,44 @@ function App() {
     }
   }
 
+  async function loadClients(silent = false) {
+    setClientsLoading(true);
+    try {
+      const response = await fetch("/api/auth/clients", { credentials: "same-origin", cache: "no-store" });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.message || "Não foi possível carregar os clientes.");
+      const items = Array.isArray(data.items) ? data.items as ClientItem[] : [];
+      setClients(items);
+      setClientPlanDrafts(Object.fromEntries(items.map((item) => [item.username, item.planCode])));
+    } catch (error) {
+      if (!silent) setToast(error instanceof Error ? error.message : "Falha ao carregar os clientes.");
+    } finally {
+      setClientsLoading(false);
+    }
+  }
+
+  async function updateClientPlan(username: string) {
+    const planCode = clientPlanDrafts[username] || "30d";
+    setClientActionLoading(username);
+    try {
+      const response = await fetch("/api/auth/clients", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, planCode }),
+        cache: "no-store",
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.message || "Não foi possível atualizar o plano.");
+      await loadClients(true);
+      setToast("Plano de @" + username + " atualizado para " + clientPlanLabel(planCode) + ".");
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : "Falha ao atualizar o plano do cliente.");
+    } finally {
+      setClientActionLoading("");
+    }
+  }
+
   async function loadManagedUsers(silent = false) {
     if (!isOwner) return;
     setManagedUsersLoading(true);
@@ -900,6 +992,7 @@ function App() {
         body: JSON.stringify({
           label: keyLabel.trim(),
           expiresInDays: keyExpiry === "never" ? null : Number(keyExpiry),
+          planCode: keyPlan,
         }),
         cache: "no-store",
       });
@@ -959,7 +1052,7 @@ function App() {
       });
       const result = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(result.message || "Não foi possível alterar o acesso.");
-      await loadManagedUsers(true);
+      await Promise.all([loadManagedUsers(true), loadClients(true)]);
       setToast(role === "admin" ? "Administrador autorizado." : "Permissões administrativas removidas.");
     } catch (error) {
       setToast(error instanceof Error ? error.message : "Falha ao alterar o acesso.");
@@ -998,7 +1091,10 @@ function App() {
     { id: "overview" as const, label: "Visão geral", icon: LayoutDashboard },
     { id: "new" as const, label: "Novo teste", icon: Plus },
     { id: "history" as const, label: "Histórico", icon: History },
-    ...(userRole === "admin" ? [{ id: "access" as const, label: "Chaves de acesso", icon: KeyRound }] : []),
+    ...(userRole === "admin" ? [
+      { id: "clients" as const, label: "Clientes", icon: Users },
+      { id: "access" as const, label: "Chaves de acesso", icon: KeyRound },
+    ] : []),
     { id: "settings" as const, label: "Configurações", icon: Settings2 },
   ];
   const registerPasswordPolicy = getPasswordPolicy(registerPassword);
@@ -1059,6 +1155,19 @@ function App() {
                   <span>Senha de acesso</span>
                   <input type="password" value={loginPassword} onChange={(event) => setLoginPassword(event.target.value)} placeholder="Digite sua senha" autoComplete="current-password" maxLength={128} required />
                 </label>
+                <label className="auth-remember-option">
+                  <input
+                    type="checkbox"
+                    checked={rememberLogin}
+                    onChange={(event) => {
+                      const checked = event.target.checked;
+                      setRememberLogin(checked);
+                      if (!checked) saveRememberedUsername("", false);
+                    }}
+                  />
+                  <span className="auth-remember-check"><Check size={12} /></span>
+                  <span className="auth-remember-copy"><strong>Lembrar login</strong><small>Manter conectado por até 30 dias neste dispositivo</small></span>
+                </label>
                 {loginError && <div className="auth-error" role="alert"><X size={15} /> {loginError}</div>}
                 <button className="auth-submit" type="submit" disabled={loginSubmitting || !loginUsername.trim() || !loginPassword}>
                   {loginSubmitting ? <LoaderCircle className="spin" size={17} /> : <span>Entrar <ArrowRight size={16} /></span>}
@@ -1066,7 +1175,7 @@ function App() {
                 <button className="auth-mode-switch" type="button" onClick={() => { setAuthMode("register"); setLoginError(""); }}>
                   Não tem uma conta? <strong>Criar conta com chave</strong>
                 </button>
-                <div className="auth-security-note"><ShieldCheck size={15} /><span>Conexão protegida. A sessão expira automaticamente.</span></div>
+                <div className="auth-security-note"><ShieldCheck size={15} /><span>{rememberLogin ? "Sua senha nunca é salva. Sessão persistente por até 30 dias." : "Sua senha nunca é salva. A sessão normal dura 4 horas."}</span></div>
               </form>
             ) : (
               <form className="auth-card" onSubmit={handleRegister}>
@@ -1370,6 +1479,95 @@ function App() {
             </section>
           )}
 
+          {page === "clients" && userRole === "admin" && (
+            <section className="page-section">
+              <div className="page-heading">
+                <div>
+                  <div className="eyebrow"><Users size={13} /> GESTÃO DE ASSINATURAS</div>
+                  <h1>Clientes</h1>
+                  <p>Gerencie os planos, acompanhe os vencimentos e renove os acessos.</p>
+                </div>
+                <button className="secondary-button" type="button" onClick={() => void loadClients()}><RefreshCw size={14} /> Atualizar</button>
+              </div>
+
+              <div className="clients-summary-grid">
+                <article className="panel clients-summary-card">
+                  <span className="clients-summary-icon"><Users size={17} /></span>
+                  <small>Total de clientes</small>
+                  <strong>{clients.length}</strong>
+                </article>
+                <article className="panel clients-summary-card">
+                  <span className="clients-summary-icon summary-active"><CheckCircle2 size={17} /></span>
+                  <small>Planos ativos</small>
+                  <strong>{clients.filter((item) => item.status === "active" && item.planStatus === "active").length}</strong>
+                </article>
+                <article className="panel clients-summary-card">
+                  <span className="clients-summary-icon summary-expired"><Clock3 size={17} /></span>
+                  <small>Planos vencidos</small>
+                  <strong>{clients.filter((item) => item.planStatus === "expired").length}</strong>
+                </article>
+                <article className="panel clients-summary-card">
+                  <span className="clients-summary-icon summary-lifetime"><ShieldCheck size={17} /></span>
+                  <small>Vitalícios</small>
+                  <strong>{clients.filter((item) => item.planCode === "lifetime").length}</strong>
+                </article>
+              </div>
+
+              <section className="panel clients-panel">
+                <div className="panel-heading">
+                  <div><h3>Base de clientes</h3><p>O plano começa a contar a partir da ativação da chave. Alterar o plano inicia um novo período a partir de agora.</p></div>
+                  <span className="access-panel-icon"><Users size={18} /></span>
+                </div>
+                {clientsLoading ? (
+                  <div className="access-empty"><LoaderCircle className="spin" size={18} /> Carregando clientes...</div>
+                ) : clients.length === 0 ? (
+                  <div className="access-empty"><Users size={22} /><strong>Nenhum cliente cadastrado</strong><span>Gere uma chave na aba Chaves de acesso para começar.</span></div>
+                ) : (
+                  <div className="client-list">
+                    {clients.map((item) => (
+                      <article className="client-row" key={item.username}>
+                        <div className="client-identity">
+                          <div className="access-user-avatar"><UserRound size={17} /></div>
+                          <div className="client-identity-copy">
+                            <strong>@{item.username}</strong>
+                            <small>Cadastro em {new Date(item.createdAt).toLocaleDateString("pt-BR")}</small>
+                            <small>{item.lastLoginAt ? "Último acesso " + new Date(item.lastLoginAt).toLocaleDateString("pt-BR") : "Ainda não entrou"}</small>
+                          </div>
+                        </div>
+                        <div className="client-current-plan">
+                          <span>PLANO ATUAL</span>
+                          <strong>{clientPlanLabel(item.planCode)}</strong>
+                          <span className={"client-plan-status " + (item.planStatus === "expired" ? "is-expired" : "is-active")}>
+                            {item.planStatus === "expired" ? "Vencido" : "Ativo"}
+                          </span>
+                        </div>
+                        <div className="client-expiry">
+                          <span>VENCIMENTO</span>
+                          <strong>{item.planExpiresAt ? new Date(item.planExpiresAt).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }) : "Sem vencimento"}</strong>
+                        </div>
+                        <div className="client-plan-editor">
+                          <label className="profile-field">
+                            <span>Alterar plano</span>
+                            <select
+                              value={clientPlanDrafts[item.username] || item.planCode}
+                              onChange={(event) => setClientPlanDrafts((current) => ({ ...current, [item.username]: event.target.value as ClientPlanCode }))}
+                            >
+                              {CLIENT_PLANS.map((plan) => <option key={plan.code} value={plan.code}>{plan.label}</option>)}
+                            </select>
+                          </label>
+                          <button className="primary-button" type="button" disabled={clientActionLoading === item.username || (clientPlanDrafts[item.username] || item.planCode) === item.planCode} onClick={() => void updateClientPlan(item.username)}>
+                            {clientActionLoading === item.username ? <LoaderCircle className="spin" size={14} /> : <Check size={14} />}
+                            {clientActionLoading === item.username ? "Salvando..." : "Aplicar plano"}
+                          </button>
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                )}
+              </section>
+            </section>
+          )}
+
           {page === "access" && userRole === "admin" && (
             <section className="page-section">
               <div className="page-heading">
@@ -1382,7 +1580,8 @@ function App() {
                   <div className="panel-heading"><div><h3>Gerar nova chave</h3><p>Cada chave libera apenas um cadastro.</p></div><span className="access-panel-icon"><KeyRound size={18} /></span></div>
                   <form className="access-create-form" onSubmit={generateAccessKey}>
                     <label className="profile-field"><span>Identificação (opcional)</span><input type="text" value={keyLabel} onChange={(event) => setKeyLabel(event.target.value)} placeholder="Ex.: Cliente João" maxLength={60} /></label>
-                    <label className="profile-field"><span>Validade da chave</span><select value={keyExpiry} onChange={(event) => setKeyExpiry(event.target.value)}><option value="1">24 horas</option><option value="7">7 dias</option><option value="30">30 dias</option><option value="90">90 dias</option><option value="365">1 ano</option><option value="never">Sem expiração</option></select></label>
+                    <label className="profile-field"><span>Plano do cliente após ativação</span><select value={keyPlan} onChange={(event) => setKeyPlan(event.target.value as ClientPlanCode)}>{CLIENT_PLANS.map((plan) => <option key={plan.code} value={plan.code}>{plan.label}</option>)}</select></label>
+                    <label className="profile-field"><span>Validade da chave para resgate</span><select value={keyExpiry} onChange={(event) => setKeyExpiry(event.target.value)}><option value="1">24 horas</option><option value="7">7 dias</option><option value="30">30 dias</option><option value="90">90 dias</option><option value="365">1 ano</option><option value="never">Sem expiração</option></select></label>
                     <button className="primary-button" type="submit" disabled={keySubmitting}>{keySubmitting ? <LoaderCircle className="spin" size={15} /> : <Plus size={15} />} {keySubmitting ? "Gerando..." : "Gerar chave de acesso"}</button>
                   </form>
                   {generatedKey && <div className="generated-key-box"><div><strong>Chave criada com sucesso</strong><small>Copie agora. Por segurança, o código completo não aparecerá novamente.</small></div><code>{generatedKey}</code><button className="secondary-button" type="button" onClick={() => void copyGeneratedKey()}><Copy size={14} /> Copiar chave</button></div>}
@@ -1395,7 +1594,7 @@ function App() {
                       {accessKeys.map((item) => (
                         <article className="access-key-row" key={item.id}>
                           <div className="access-key-main"><div><strong>{item.label || "Acesso IPTV Flow"}</strong><code>{item.prefix}••••••••</code></div><span className={"access-status status-" + item.status}>{item.status === "active" ? "Disponível" : item.status === "used" ? "Utilizada" : item.status === "expired" ? "Expirada" : "Revogada"}</span></div>
-                          <div className="access-key-meta"><span>Criada por @{item.createdBy}</span><span>{item.expiresAt ? "Expira em " + new Date(item.expiresAt).toLocaleDateString("pt-BR") : "Sem expiração"}</span>{item.redeemedBy && <span>Resgatada por @{item.redeemedBy}</span>}</div>
+                          <div className="access-key-meta"><span>Plano: {clientPlanLabel(item.planCode)}</span><span>Criada por @{item.createdBy}</span><span>{item.expiresAt ? "Chave expira em " + new Date(item.expiresAt).toLocaleDateString("pt-BR") : "Chave sem expiração"}</span>{item.redeemedBy && <span>Resgatada por @{item.redeemedBy}</span>}</div>
                           {item.status === "active" && <button className="text-button access-revoke-button" type="button" onClick={() => void revokeAccessKey(item.id)}><Trash2 size={13} /> Revogar chave</button>}
                         </article>
                       ))}

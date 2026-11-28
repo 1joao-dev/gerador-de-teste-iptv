@@ -7,6 +7,15 @@ const scryptAsync = promisify(crypto.scrypt);
 const PASSWORD_MIN_LENGTH = 8;
 const PASSWORD_MAX_LENGTH = 128;
 const ALLOWED_EXPIRY_DAYS = new Set([1, 7, 30, 90, 365]);
+const CLIENT_PLAN_DURATIONS = Object.freeze({
+  "24h": 1,
+  "7d": 7,
+  "30d": 30,
+  "90d": 90,
+  "1y": 365,
+  lifetime: null,
+});
+const ALLOWED_PLAN_CODES = new Set(Object.keys(CLIENT_PLAN_DURATIONS));
 
 function httpError(statusCode, message) {
   return Object.assign(new Error(message), { statusCode });
@@ -69,14 +78,27 @@ function safeEqualText(left, right) {
   return crypto.timingSafeEqual(leftDigest, rightDigest) && leftText.length === rightText.length;
 }
 
-function publicUser(user) {
+function isPlanExpired(user, now = Date.now()) {
+  return Boolean(user?.planExpiresAt && Date.parse(user.planExpiresAt) <= now);
+}
+
+function getPlanExpiresAt(planCode, startAt = new Date()) {
+  const days = CLIENT_PLAN_DURATIONS[planCode];
+  return days === null ? null : new Date(startAt.getTime() + days * 24 * 60 * 60 * 1000).toISOString();
+}
+
+function publicUser(user, now = Date.now()) {
   if (!user) return null;
+  const planCode = user.planCode || "lifetime";
   return {
     username: user.username,
     role: user.role,
     status: user.status,
     createdAt: user.createdAt,
     lastLoginAt: user.lastLoginAt || null,
+    planCode,
+    planExpiresAt: user.planExpiresAt || null,
+    planStatus: user.role === "user" && isPlanExpired(user, now) ? "expired" : "active",
   };
 }
 
@@ -100,6 +122,7 @@ function publicKey(key, now = Date.now()) {
     revokedAt: key.revokedAt || null,
     revokedBy: key.revokedBy || null,
     status: keyStatus(key, now),
+    planCode: key.planCode || "lifetime",
   };
 }
 
@@ -169,13 +192,16 @@ export class AuthStore {
       .digest("hex");
   }
 
-  async createAccessKey({ actor, label = "", expiresInDays = 30 }) {
+  async createAccessKey({ actor, label = "", expiresInDays = 30, planCode = "30d" }) {
     await this.init();
     if (!actor || !["owner", "admin"].includes(actor.role)) {
       throw httpError(403, "Somente proprietários e administradores podem gerar chaves.");
     }
     if (expiresInDays !== null && !ALLOWED_EXPIRY_DAYS.has(Number(expiresInDays))) {
       throw httpError(400, "Escolha uma validade permitida para a chave.");
+    }
+    if (!ALLOWED_PLAN_CODES.has(String(planCode))) {
+      throw httpError(400, "Escolha um plano válido para o cliente.");
     }
     const cleanLabel = String(label || "").trim().slice(0, 60);
     return this.exclusive(async () => {
@@ -192,6 +218,7 @@ export class AuthStore {
         createdBy: actor.username,
         createdAt: now.toISOString(),
         expiresAt,
+        planCode,
         redeemedAt: null,
         redeemedBy: null,
         revokedAt: null,
@@ -242,6 +269,9 @@ export class AuthStore {
         status: "active",
         createdAt: now,
         lastLoginAt: now,
+        planCode: key.planCode || "lifetime",
+        planStartedAt: now,
+        planExpiresAt: key.planCode ? getPlanExpiresAt(key.planCode, new Date(now)) : null,
       };
       key.redeemedAt = now;
       key.redeemedBy = normalizedUsername;
@@ -256,7 +286,7 @@ export class AuthStore {
     const normalizedUsername = normalizeUsername(username);
     return this.exclusive(async () => {
       const user = this.state.users.find((item) => item.username === normalizedUsername);
-      if (!user || user.status !== "active") return null;
+      if (!user || user.status !== "active" || (user.role === "user" && isPlanExpired(user))) return null;
       const valid = await verifyPassword(password, user);
       if (!valid) return null;
       user.lastLoginAt = new Date().toISOString();
@@ -329,7 +359,7 @@ export class AuthStore {
       return { username: normalizedUsername, role: "owner", status: "active" };
     }
     const user = this.state.users.find((item) => item.username === normalizedUsername);
-    if (!user || user.status !== "active") return null;
+    if (!user || user.status !== "active" || (user.role === "user" && isPlanExpired(user))) return null;
     return publicUser(user);
   }
 
@@ -369,6 +399,37 @@ export class AuthStore {
     return [...this.state.users]
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
       .map(publicUser);
+  }
+
+  async listClients() {
+    await this.init();
+    return [...this.state.users]
+      .filter((user) => user.role === "user")
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .map(publicUser);
+  }
+
+  async setClientPlan({ username, planCode, actor }) {
+    await this.init();
+    if (!actor || !["owner", "admin"].includes(actor.role)) {
+      throw httpError(403, "Somente proprietários e administradores podem gerenciar clientes.");
+    }
+    const normalizedUsername = normalizeUsername(username);
+    if (!normalizedUsername || !ALLOWED_PLAN_CODES.has(String(planCode))) {
+      throw httpError(400, "Cliente ou plano inválido.");
+    }
+    return this.exclusive(async () => {
+      const user = this.state.users.find((item) => item.username === normalizedUsername);
+      if (!user || user.role !== "user") {
+        throw httpError(404, "Cliente não encontrado.");
+      }
+      const now = new Date();
+      user.planCode = String(planCode);
+      user.planStartedAt = now.toISOString();
+      user.planExpiresAt = getPlanExpiresAt(user.planCode, now);
+      await this.persist();
+      return publicUser(user);
+    });
   }
 
   async setUserRole({ username, role, actor }) {

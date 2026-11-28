@@ -116,3 +116,14 @@ O workflow **FUTEX live diagnostic** abre o portal em um Chromium isolado, ident
 - Somente o proprietário pode promover contas existentes a administradoras; o cadastro público nunca permite escolher o papel administrativo.
 - O histórico do worker é filtrado por usuário; contas comuns não conseguem consultar solicitações de outras contas.
 - As chaves são armazenadas como HMAC-SHA256, exibidas integralmente somente uma vez e podem ser revogadas antes do resgate.
+
+
+## Clientes e planos
+
+O painel administrativo inclui a aba **Clientes**, com acompanhamento dos planos ativos, vencidos e vitalícios. Ao gerar uma chave de acesso, o administrador escolhe o plano que será aplicado quando o cliente resgatar a chave: 24 horas, 7 dias, 30 dias, 90 dias, 1 ano ou vitalício. A validade da chave para resgate é configurada separadamente e não inicia a contagem do plano. A contagem começa na ativação da conta.
+
+Planos temporários vencidos bloqueiam novos logins e o uso do sistema até que um administrador ou proprietário aplique um novo plano. A alteração de plano inicia um novo período a partir do momento da alteração. Contas e chaves antigas sem plano explícito são preservadas como vitalícias para evitar interrupções durante a atualização.
+
+## Lembrar login
+
+A tela de entrada oferece a opção **Lembrar login**. Quando marcada, o cookie de sessão seguro permanece válido por até 30 dias neste dispositivo. O navegador guarda somente o nome de usuário para preencher o campo na próxima visita; a senha nunca é armazenada localmente. Sem a opção, a sessão continua com validade de 4 horas.

@@ -1,5 +1,6 @@
 import {
   ADMIN_SESSION_TTL_SECONDS,
+  REMEMBERED_SESSION_TTL_SECONDS,
   clearLoginFailures,
   createUserSession,
   getAdminUsername,
@@ -36,6 +37,7 @@ export default async function handler(req, res) {
   const body = req.body && typeof req.body === "object" ? req.body : {};
   const username = typeof body.username === "string" ? body.username.trim().toLowerCase().slice(0, 64) : "";
   const password = typeof body.password === "string" ? body.password : "";
+  const rememberMe = body.rememberMe === true;
   if (!username || !password || password.length > 128) {
     recordLoginFailure(req);
     return res.status(401).json({ message: "Usuário ou senha inválidos." });
@@ -88,12 +90,13 @@ export default async function handler(req, res) {
 
   clearLoginFailures(req);
   try {
-    const token = createUserSession(username, role);
-    setAdminSessionCookie(res, token);
+    const token = createUserSession(username, role, rememberMe);
+    setAdminSessionCookie(res, token, rememberMe);
     return res.status(200).json({
       authenticated: true,
       user: { username, role },
-      expiresIn: ADMIN_SESSION_TTL_SECONDS,
+      expiresIn: rememberMe ? REMEMBERED_SESSION_TTL_SECONDS : ADMIN_SESSION_TTL_SECONDS,
+      remembered: rememberMe,
     });
   } catch {
     return res.status(503).json({ message: "Não foi possível iniciar a sessão segura. Verifique a configuração do servidor." });

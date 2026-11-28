@@ -43,11 +43,31 @@ export default async function handler(req, res) {
 
   let role = "user";
   if (username === getAdminUsername()) {
-    if (!verifyAdminCredentials(username, password)) {
-      recordLoginFailure(req);
-      return res.status(401).json({ message: "Usuário ou senha inválidos." });
+    try {
+      const ownerResult = await workerAuthRequest("/api/auth/owner-login", {
+        method: "POST",
+        body: { password },
+      });
+      if (ownerResult.status !== 200) {
+        return res.status(ownerResult.status).json({
+          message: ownerResult.data?.message || "Não foi possível validar a senha do proprietário.",
+        });
+      }
+      if (ownerResult.data?.configured === true) {
+        if (ownerResult.data.authenticated !== true) {
+          recordLoginFailure(req);
+          return res.status(401).json({ message: "Usuário ou senha inválidos." });
+        }
+      } else if (!verifyAdminCredentials(username, password)) {
+        recordLoginFailure(req);
+        return res.status(401).json({ message: "Usuário ou senha inválidos." });
+      }
+      role = "owner";
+    } catch (error) {
+      return res.status(error?.statusCode || 502).json({
+        message: error?.message || "Não foi possível validar sua conta no momento.",
+      });
     }
-    role = "owner";
   } else {
     try {
       const result = await workerAuthRequest("/api/auth/login", {

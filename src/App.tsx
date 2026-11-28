@@ -304,6 +304,10 @@ function App() {
   const [registerLicenseKey, setRegisterLicenseKey] = useState("");
   const [registerPassword, setRegisterPassword] = useState("");
   const [registerPasswordConfirm, setRegisterPasswordConfirm] = useState("");
+  const [passwordCurrent, setPasswordCurrent] = useState("");
+  const [passwordNew, setPasswordNew] = useState("");
+  const [passwordConfirm, setPasswordConfirm] = useState("");
+  const [passwordSubmitting, setPasswordSubmitting] = useState(false);
   const [loginError, setLoginError] = useState("");
   const [loginSubmitting, setLoginSubmitting] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
@@ -494,12 +498,62 @@ function App() {
       setProfileDraft(savedProfile);
       setRegisterPassword("");
       setRegisterPasswordConfirm("");
+      setPasswordCurrent("");
+      setPasswordNew("");
+      setPasswordConfirm("");
       setRegisterLicenseKey("");
       setAuthState("authenticated");
     } catch (error) {
       setLoginError(error instanceof Error ? error.message : "Falha ao criar conta. Tente novamente.");
     } finally {
       setLoginSubmitting(false);
+    }
+  }
+
+  async function handleChangePassword(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (passwordSubmitting) return;
+
+    const policy = getPasswordPolicy(passwordNew);
+    if (!passwordCurrent) {
+      setToast("Informe sua senha atual.");
+      return;
+    }
+    if (!policy.valid) {
+      setToast("A nova senha precisa ter no mínimo 8 caracteres, uma letra maiúscula, um número e um símbolo.");
+      return;
+    }
+    if (passwordNew !== passwordConfirm) {
+      setToast("A confirmação não corresponde à nova senha.");
+      return;
+    }
+    if (passwordCurrent === passwordNew) {
+      setToast("A nova senha precisa ser diferente da senha atual.");
+      return;
+    }
+
+    setPasswordSubmitting(true);
+    try {
+      const response = await fetch("/api/auth/password", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          currentPassword: passwordCurrent,
+          newPassword: passwordNew,
+        }),
+        cache: "no-store",
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.message || "Não foi possível alterar a senha.");
+      setPasswordCurrent("");
+      setPasswordNew("");
+      setPasswordConfirm("");
+      setToast("Senha alterada com sucesso.");
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : "Falha ao alterar a senha. Tente novamente.");
+    } finally {
+      setPasswordSubmitting(false);
     }
   }
 
@@ -945,6 +999,7 @@ function App() {
     { id: "settings" as const, label: "Configurações", icon: Settings2 },
   ];
   const registerPasswordPolicy = getPasswordPolicy(registerPassword);
+  const changePasswordPolicy = getPasswordPolicy(passwordNew);
 
   if (authState === "checking") {
     return (
@@ -1419,6 +1474,48 @@ function App() {
                   </form>
                   <div className="profile-storage-note"><ShieldCheck size={14} /><span>As personalizações ficam salvas neste navegador e neste dispositivo. Sua senha é gerenciada pelo serviço de autenticação.</span></div>
                 </section>
+
+                <section className="panel settings-panel password-settings-panel">
+                  <div className="settings-heading">
+                    <span className="settings-icon"><LockKeyhole size={19} /></span>
+                    <div><h3>Segurança da conta</h3><p>Altere a senha usada para entrar no IPTV Flow.</p></div>
+                  </div>
+                  <form className="password-change-form" onSubmit={handleChangePassword}>
+                    <label className="profile-field">
+                      <span>Senha atual</span>
+                      <input type="password" value={passwordCurrent} onChange={(event) => setPasswordCurrent(event.target.value)} placeholder="Digite sua senha atual" autoComplete="current-password" maxLength={128} required />
+                    </label>
+                    <label className="profile-field">
+                      <span>Nova senha</span>
+                      <input type="password" value={passwordNew} onChange={(event) => setPasswordNew(event.target.value)} placeholder="Crie uma nova senha" autoComplete="new-password" minLength={8} maxLength={128} required />
+                    </label>
+                    {passwordNew && (
+                      <div className={"password-strength strength-" + changePasswordPolicy.strength} aria-live="polite">
+                        <div className="password-strength-top"><span>Força da nova senha</span><strong>{changePasswordPolicy.strength === "weak" ? "Fraca" : changePasswordPolicy.strength === "medium" ? "Média" : "Forte"}</strong></div>
+                        <div className="password-strength-track"><i /><i /><i /></div>
+                        <div className="password-requirements">
+                          <span className={changePasswordPolicy.checks.length ? "met" : ""}><Check size={12} /> 8 caracteres</span>
+                          <span className={changePasswordPolicy.checks.uppercase ? "met" : ""}><Check size={12} /> Maiúscula</span>
+                          <span className={changePasswordPolicy.checks.number ? "met" : ""}><Check size={12} /> Número</span>
+                          <span className={changePasswordPolicy.checks.symbol ? "met" : ""}><Check size={12} /> Símbolo</span>
+                        </div>
+                      </div>
+                    )}
+                    <label className="profile-field">
+                      <span>Confirmar nova senha</span>
+                      <input type="password" value={passwordConfirm} onChange={(event) => setPasswordConfirm(event.target.value)} placeholder="Digite a nova senha novamente" autoComplete="new-password" maxLength={128} required />
+                    </label>
+                    {passwordConfirm && <div className={"password-match " + (passwordNew === passwordConfirm ? "matched" : "unmatched")}>{passwordNew === passwordConfirm ? "As senhas coincidem." : "As senhas ainda não coincidem."}</div>}
+                    <div className="password-change-footer">
+                      <span><ShieldCheck size={14} /> A senha é verificada e atualizada com segurança no servidor.</span>
+                      <button className="primary-button" type="submit" disabled={passwordSubmitting}>
+                        {passwordSubmitting ? <LoaderCircle className="spin" size={15} /> : <Check size={15} />}
+                        {passwordSubmitting ? "Atualizando..." : "Alterar senha"}
+                      </button>
+                    </div>
+                  </form>
+                </section>
+
                 {userRole === "admin" && <><section className="panel settings-panel"><div className="settings-heading"><span className="settings-icon"><RadioTower size={19} /></span><div><h3>Integração de automação</h3><p>Conexão entre o aplicativo e o serviço que processa as solicitações.</p></div><span className={"config-value " + (automationReady ? "configured" : "pending")}>{workerHealth === "checking" ? "Verificando" : automationReady ? "Ativo" : workerHealth === "online" ? "Pausado" : "Offline"}</span></div><div className="settings-row"><div><strong>Proxy seguro da aplicação</strong><small>A chave do worker permanece no servidor Vercel.</small></div><span className="config-value configured">Configurado</span></div><div className="settings-row"><div><strong>Autenticação administrativa</strong><small>Acesso por sessão segura, sem armazenar senha no navegador.</small></div><span className="config-value configured">Protegida</span></div><div className="settings-row"><div><strong>Worker de automação</strong><small>Processador Playwright executado em servidor persistente.</small></div><span className={"config-value " + (workerHealth === "online" ? "configured" : "pending")}>{workerHealth === "checking" ? "Verificando" : workerHealth === "online" ? "Online" : "Offline"}</span></div><div className="settings-row"><div><strong>Conexão FUTEX</strong><small>O worker usa o atendimento original da FUTEX e devolve os dados ao IPTV Flow.</small></div><span className={"config-value " + (automationReady ? "configured" : "pending")}>{workerAutomationEnabled ? "Ativa" : "Desativada"}</span></div><div className="settings-row"><div><strong>Formulário próprio + FUTEX</strong><small>O usuário preenche o formulário próprio; a FUTEX processa o teste em segundo plano.</small></div><span className="config-value configured">Integração</span></div>
 <div className="settings-callout"><LockKeyhole size={16} /><p>A sessão administrativa usa cookie HttpOnly, Secure e SameSite=Strict. A senha é validada exclusivamente no servidor; o token interno do worker nunca é enviado ao navegador.</p></div><button className="secondary-button" type="button" onClick={() => void checkWorkerHealth()}><RefreshCw size={14} /> Verificar conexão</button><button className="secondary-button" type="button" onClick={() => void runFutexDiagnostic()} disabled={diagnosingFutex || workerHealth !== "online"}>{diagnosingFutex ? <LoaderCircle className="spin" size={14} /> : <Activity size={14} />} {diagnosingFutex ? "Analisando site..." : "Diagnosticar FUTEX"}</button>{futexDiagnostic && <><pre className="diagnostic-output">{futexDiagnostic}</pre><button className="text-button" type="button" onClick={() => void copyValue("Diagnóstico", futexDiagnostic)}><Copy size={14} /> Copiar diagnóstico</button></>}</section>
                 <section className="panel settings-panel"><div className="settings-heading"><span className="settings-icon"><Gauge size={19} /></span><div><h3>Ambiente do aplicativo</h3><p>Informações de execução desta versão.</p></div></div><div className="settings-row"><div><strong>Interface web</strong><small>Aplicação React responsiva.</small></div><span className="config-value configured">Operacional</span></div><div className="settings-row"><div><strong>Armazenamento local</strong><small>Rascunhos salvos neste navegador.</small></div><span className="config-value configured">Ativo</span></div><div className="settings-row"><div><strong>Sincronização entre dispositivos</strong><small>Histórico persistido no volume do servidor worker.</small></div><span className="config-value configured">Preparada</span></div></section></>}

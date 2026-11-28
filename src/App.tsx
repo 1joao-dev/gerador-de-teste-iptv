@@ -572,6 +572,9 @@ function App() {
       setLoginPassword("");
       setRegisterPassword("");
       setRegisterPasswordConfirm("");
+      setPasswordCurrent("");
+      setPasswordNew("");
+      setPasswordConfirm("");
       setRegisterLicenseKey("");
       setLoginError("");
       setAuthMode("login");

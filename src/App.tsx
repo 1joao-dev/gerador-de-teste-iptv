@@ -484,12 +484,13 @@ function App() {
         method: "POST",
         credentials: "same-origin",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username: loginUsername.trim(), password: loginPassword }),
+        body: JSON.stringify({ username: loginUsername.trim(), password: loginPassword, rememberMe: rememberLogin }),
         cache: "no-store",
       });
       const result = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(result.message || "Não foi possível autenticar.");
       const username = result.user?.username || loginUsername.trim() || "admin";
+      saveRememberedUsername(username, rememberLogin);
       const isOwnerAccount = result.user?.role === "owner";
       const role = result.user?.role === "user" ? "user" : "admin";
       setAdminUsername(username);
@@ -1113,6 +1114,19 @@ function App() {
                   <span>Senha de acesso</span>
                   <input type="password" value={loginPassword} onChange={(event) => setLoginPassword(event.target.value)} placeholder="Digite sua senha" autoComplete="current-password" maxLength={128} required />
                 </label>
+                <label className="auth-remember-option">
+                  <input
+                    type="checkbox"
+                    checked={rememberLogin}
+                    onChange={(event) => {
+                      const checked = event.target.checked;
+                      setRememberLogin(checked);
+                      if (!checked) saveRememberedUsername("", false);
+                    }}
+                  />
+                  <span className="auth-remember-check"><Check size={12} /></span>
+                  <span className="auth-remember-copy"><strong>Lembrar login</strong><small>Manter conectado por até 30 dias neste dispositivo</small></span>
+                </label>
                 {loginError && <div className="auth-error" role="alert"><X size={15} /> {loginError}</div>}
                 <button className="auth-submit" type="submit" disabled={loginSubmitting || !loginUsername.trim() || !loginPassword}>
                   {loginSubmitting ? <LoaderCircle className="spin" size={17} /> : <span>Entrar <ArrowRight size={16} /></span>}
@@ -1120,7 +1134,7 @@ function App() {
                 <button className="auth-mode-switch" type="button" onClick={() => { setAuthMode("register"); setLoginError(""); }}>
                   Não tem uma conta? <strong>Criar conta com chave</strong>
                 </button>
-                <div className="auth-security-note"><ShieldCheck size={15} /><span>Conexão protegida. A sessão expira automaticamente.</span></div>
+                <div className="auth-security-note"><ShieldCheck size={15} /><span>Sua senha nunca é salva. A sessão normal dura 4 horas.</span></div>
               </form>
             ) : (
               <form className="auth-card" onSubmit={handleRegister}>

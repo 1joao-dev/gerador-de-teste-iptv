@@ -217,8 +217,8 @@ app.use("/api", async (req, res, next) => {
 
   try {
     const user = await authStore.getUser(username);
-    if (!user || user.status !== "active") {
-      return res.status(401).json({ message: "Conta inativa ou sessão expirada. Entre novamente." });
+    if (!user || user.status !== "active" || user.planStatus === "expired") {
+      return res.status(401).json({ message: user?.planStatus === "expired" ? "Seu plano expirou. Procure o administrador para renovar o acesso." : "Conta inativa ou sessão expirada. Entre novamente." });
     }
     req.iptvflowIdentity = { username, role: user.role };
     return next();
@@ -328,6 +328,7 @@ app.post("/api/auth/keys", async (req, res) => {
       actor,
       label: req.body?.label,
       expiresInDays,
+      planCode: req.body?.planCode,
     });
     return res.status(201).json(result);
   } catch (error) {
@@ -353,6 +354,35 @@ app.get("/api/auth/users", async (req, res) => {
     return res.json({ items: await authStore.listUsers() });
   } catch {
     return res.status(503).json({ message: "Não foi possível carregar os usuários." });
+  }
+});
+
+app.get("/api/auth/clients", async (req, res) => {
+  const actor = requestIdentity(req);
+  if (!["owner", "admin"].includes(actor.role)) {
+    return res.status(403).json({ message: "Somente proprietários e administradores podem acessar os clientes." });
+  }
+  try {
+    return res.json({ items: await authStore.listClients() });
+  } catch {
+    return res.status(503).json({ message: "Não foi possível carregar os clientes." });
+  }
+});
+
+app.post("/api/auth/clients/plan", async (req, res) => {
+  const actor = requestIdentity(req);
+  if (!["owner", "admin"].includes(actor.role)) {
+    return res.status(403).json({ message: "Somente proprietários e administradores podem alterar planos." });
+  }
+  try {
+    const client = await authStore.setClientPlan({
+      username: req.body?.username,
+      planCode: req.body?.planCode,
+      actor,
+    });
+    return res.json({ client });
+  } catch (error) {
+    return res.status(error?.statusCode || 500).json({ message: error?.message || "Não foi possível atualizar o plano do cliente." });
   }
 });
 

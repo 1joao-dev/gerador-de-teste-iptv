@@ -61,6 +61,14 @@ async function verifyPassword(password, user) {
   return crypto.timingSafeEqual(derived, expected);
 }
 
+function safeEqualText(left, right) {
+  const leftText = String(left ?? "");
+  const rightText = String(right ?? "");
+  const leftDigest = crypto.createHash("sha256").update(leftText).digest();
+  const rightDigest = crypto.createHash("sha256").update(rightText).digest();
+  return crypto.timingSafeEqual(leftDigest, rightDigest) && leftText.length === rightText.length;
+}
+
 function publicUser(user) {
   if (!user) return null;
   return {
@@ -104,7 +112,7 @@ export class AuthStore {
     this.filePath = path.resolve(filePath);
     this.pepper = pepper;
     this.ownerUsername = normalizeUsername(ownerUsername);
-    this.state = { version: 1, users: [], keys: [] };
+    this.state = { version: 1, users: [], keys: [], ownerCredentials: null };
     this.loaded = false;
     this.queue = Promise.resolve();
   }
@@ -118,7 +126,7 @@ export class AuthStore {
       if (parsed?.version !== 1 || !Array.isArray(parsed.users) || !Array.isArray(parsed.keys)) {
         throw new Error("Formato do armazenamento de autenticação inválido.");
       }
-      this.state = parsed;
+      this.state = { ...parsed, ownerCredentials: parsed.ownerCredentials || null };
     } catch (error) {
       if (error?.code !== "ENOENT") throw error;
       await this.persist();
@@ -240,6 +248,63 @@ export class AuthStore {
       user.lastLoginAt = new Date().toISOString();
       await this.persist();
       return publicUser(user);
+    });
+  }
+
+  async authenticateOwner({ password }) {
+    await this.init();
+    return this.exclusive(async () => {
+      if (!this.state.ownerCredentials) {
+        return { configured: false, authenticated: false };
+      }
+      const authenticated = await verifyPassword(password, this.state.ownerCredentials);
+      return { configured: true, authenticated };
+    });
+  }
+
+  async changePassword({ username, role, currentPassword, newPassword, initialOwnerPassword }) {
+    await this.init();
+    const normalizedUsername = normalizeUsername(username);
+    if (!validatePassword(newPassword)) {
+      throw httpError(400, "A nova senha precisa ter no mínimo 8 caracteres, uma letra maiúscula, um número e um símbolo.");
+    }
+    if (safeEqualText(currentPassword, newPassword)) {
+      throw httpError(400, "A nova senha precisa ser diferente da senha atual.");
+    }
+
+    return this.exclusive(async () => {
+      if (role === "owner") {
+        if (normalizedUsername !== this.ownerUsername) {
+          throw httpError(403, "Somente o proprietário pode alterar esta senha.");
+        }
+        const valid = this.state.ownerCredentials
+          ? await verifyPassword(currentPassword, this.state.ownerCredentials)
+          : safeEqualText(currentPassword, initialOwnerPassword);
+        if (!valid) throw httpError(401, "A senha atual está incorreta.");
+
+        this.state.ownerCredentials = {
+          username: this.ownerUsername,
+          ...(await hashPassword(newPassword)),
+          updatedAt: new Date().toISOString(),
+        };
+      } else {
+        if (!["admin", "user"].includes(role)) {
+          throw httpError(403, "Sessão inválida para alterar a senha.");
+        }
+        const user = this.state.users.find((item) => item.username === normalizedUsername);
+        if (!user || user.status !== "active") {
+          throw httpError(401, "Conta inativa ou sessão expirada. Entre novamente.");
+        }
+        if (!await verifyPassword(currentPassword, user)) {
+          throw httpError(401, "A senha atual está incorreta.");
+        }
+        Object.assign(user, await hashPassword(newPassword), {
+          passwordChangedAt: new Date().toISOString(),
+        });
+      }
+
+      await this.persist();
+      return { changed: true };
     });
   }
 

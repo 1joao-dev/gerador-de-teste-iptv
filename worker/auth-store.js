@@ -98,7 +98,7 @@ function publicUser(user, now = Date.now()) {
     lastLoginAt: user.lastLoginAt || null,
     planCode,
     planExpiresAt: user.planExpiresAt || null,
-    planStatus: isPlanExpired(user, now) ? "expired" : "active",
+    planStatus: user.role === "user" && isPlanExpired(user, now) ? "expired" : "active",
   };
 }
 
@@ -286,7 +286,7 @@ export class AuthStore {
     const normalizedUsername = normalizeUsername(username);
     return this.exclusive(async () => {
       const user = this.state.users.find((item) => item.username === normalizedUsername);
-      if (!user || user.status !== "active" || isPlanExpired(user)) return null;
+      if (!user || user.status !== "active" || (user.role === "user" && isPlanExpired(user))) return null;
       const valid = await verifyPassword(password, user);
       if (!valid) return null;
       user.lastLoginAt = new Date().toISOString();
@@ -359,7 +359,7 @@ export class AuthStore {
       return { username: normalizedUsername, role: "owner", status: "active" };
     }
     const user = this.state.users.find((item) => item.username === normalizedUsername);
-    if (!user || user.status !== "active" || isPlanExpired(user)) return null;
+    if (!user || user.status !== "active" || (user.role === "user" && isPlanExpired(user))) return null;
     return publicUser(user);
   }
 

@@ -924,6 +924,44 @@ function App() {
     }
   }
 
+  async function loadClients(silent = false) {
+    setClientsLoading(true);
+    try {
+      const response = await fetch("/api/auth/clients", { credentials: "same-origin", cache: "no-store" });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.message || "Não foi possível carregar os clientes.");
+      const items = Array.isArray(data.items) ? data.items as ClientItem[] : [];
+      setClients(items);
+      setClientPlanDrafts(Object.fromEntries(items.map((item) => [item.username, item.planCode])));
+    } catch (error) {
+      if (!silent) setToast(error instanceof Error ? error.message : "Falha ao carregar os clientes.");
+    } finally {
+      setClientsLoading(false);
+    }
+  }
+
+  async function updateClientPlan(username: string) {
+    const planCode = clientPlanDrafts[username] || "30d";
+    setClientActionLoading(username);
+    try {
+      const response = await fetch("/api/auth/clients", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, planCode }),
+        cache: "no-store",
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.message || "Não foi possível atualizar o plano.");
+      await loadClients(true);
+      setToast("Plano de @" + username + " atualizado para " + clientPlanLabel(planCode) + ".");
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : "Falha ao atualizar o plano do cliente.");
+    } finally {
+      setClientActionLoading("");
+    }
+  }
+
   async function loadManagedUsers(silent = false) {
     if (!isOwner) return;
     setManagedUsersLoading(true);
@@ -952,6 +990,7 @@ function App() {
         body: JSON.stringify({
           label: keyLabel.trim(),
           expiresInDays: keyExpiry === "never" ? null : Number(keyExpiry),
+          planCode: keyPlan,
         }),
         cache: "no-store",
       });
@@ -1450,7 +1489,8 @@ function App() {
                   <div className="panel-heading"><div><h3>Gerar nova chave</h3><p>Cada chave libera apenas um cadastro.</p></div><span className="access-panel-icon"><KeyRound size={18} /></span></div>
                   <form className="access-create-form" onSubmit={generateAccessKey}>
                     <label className="profile-field"><span>Identificação (opcional)</span><input type="text" value={keyLabel} onChange={(event) => setKeyLabel(event.target.value)} placeholder="Ex.: Cliente João" maxLength={60} /></label>
-                    <label className="profile-field"><span>Validade da chave</span><select value={keyExpiry} onChange={(event) => setKeyExpiry(event.target.value)}><option value="1">24 horas</option><option value="7">7 dias</option><option value="30">30 dias</option><option value="90">90 dias</option><option value="365">1 ano</option><option value="never">Sem expiração</option></select></label>
+                    <label className="profile-field"><span>Plano do cliente após ativação</span><select value={keyPlan} onChange={(event) => setKeyPlan(event.target.value as ClientPlanCode)}>{CLIENT_PLANS.map((plan) => <option key={plan.code} value={plan.code}>{plan.label}</option>)}</select></label>
+                    <label className="profile-field"><span>Validade da chave para resgate</span><select value={keyExpiry} onChange={(event) => setKeyExpiry(event.target.value)}><option value="1">24 horas</option><option value="7">7 dias</option><option value="30">30 dias</option><option value="90">90 dias</option><option value="365">1 ano</option><option value="never">Sem expiração</option></select></label>
                     <button className="primary-button" type="submit" disabled={keySubmitting}>{keySubmitting ? <LoaderCircle className="spin" size={15} /> : <Plus size={15} />} {keySubmitting ? "Gerando..." : "Gerar chave de acesso"}</button>
                   </form>
                   {generatedKey && <div className="generated-key-box"><div><strong>Chave criada com sucesso</strong><small>Copie agora. Por segurança, o código completo não aparecerá novamente.</small></div><code>{generatedKey}</code><button className="secondary-button" type="button" onClick={() => void copyGeneratedKey()}><Copy size={14} /> Copiar chave</button></div>}
@@ -1463,7 +1503,7 @@ function App() {
                       {accessKeys.map((item) => (
                         <article className="access-key-row" key={item.id}>
                           <div className="access-key-main"><div><strong>{item.label || "Acesso IPTV Flow"}</strong><code>{item.prefix}••••••••</code></div><span className={"access-status status-" + item.status}>{item.status === "active" ? "Disponível" : item.status === "used" ? "Utilizada" : item.status === "expired" ? "Expirada" : "Revogada"}</span></div>
-                          <div className="access-key-meta"><span>Criada por @{item.createdBy}</span><span>{item.expiresAt ? "Expira em " + new Date(item.expiresAt).toLocaleDateString("pt-BR") : "Sem expiração"}</span>{item.redeemedBy && <span>Resgatada por @{item.redeemedBy}</span>}</div>
+                          <div className="access-key-meta"><span>Plano: {clientPlanLabel(item.planCode)}</span><span>Criada por @{item.createdBy}</span><span>{item.expiresAt ? "Chave expira em " + new Date(item.expiresAt).toLocaleDateString("pt-BR") : "Chave sem expiração"}</span>{item.redeemedBy && <span>Resgatada por @{item.redeemedBy}</span>}</div>
                           {item.status === "active" && <button className="text-button access-revoke-button" type="button" onClick={() => void revokeAccessKey(item.id)}><Trash2 size={13} /> Revogar chave</button>}
                         </article>
                       ))}

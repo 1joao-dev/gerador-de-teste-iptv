@@ -27,4 +27,4 @@ jobs:
       - name: Test secure Vercel proxy
         run: node --test tests/proxy.test.js
       - name: Check worker and Vercel proxy syntax
-        run: npm run check --prefix worker && node --check api/worker.js
+        run: npm run check --prefix worker && node --check api/worker.js && node --check api/auth/login.js && node --check api/auth/password.js

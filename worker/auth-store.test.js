@@ -87,3 +87,77 @@ test("registration enforces the agreed password policy", async (t) => {
     /letra maiúscula/,
   );
 });
+
+
+test("users can change their password only after proving the current password", async (t) => {
+  const store = await createStore(t);
+  const generated = await store.createAccessKey({
+    actor: { username: "1joaodev", role: "owner" },
+    expiresInDays: null,
+  });
+  await store.register({
+    username: "cliente01",
+    password: "SenhaAntiga123!",
+    accessKey: generated.key,
+  });
+
+  await assert.rejects(
+    store.changePassword({
+      username: "cliente01",
+      role: "user",
+      currentPassword: "SenhaErrada123!",
+      newPassword: "SenhaNova456!",
+    }),
+    /senha atual está incorreta/,
+  );
+
+  await store.changePassword({
+    username: "cliente01",
+    role: "user",
+    currentPassword: "SenhaAntiga123!",
+    newPassword: "SenhaNova456!",
+  });
+
+  assert.equal(await store.authenticate({ username: "cliente01", password: "SenhaAntiga123!" }), null);
+  assert.equal((await store.authenticate({ username: "cliente01", password: "SenhaNova456!" })).username, "cliente01");
+});
+
+test("owner can replace the initial server password and authenticate with the new stored password", async (t) => {
+  const store = await createStore(t);
+  assert.deepEqual(
+    await store.authenticateOwner({ password: "SenhaInicial123!" }),
+    { configured: false, authenticated: false },
+  );
+
+  await assert.rejects(
+    store.changePassword({
+      username: "1joaodev",
+      role: "owner",
+      currentPassword: "SenhaErrada123!",
+      newPassword: "SenhaNova456!",
+      initialOwnerPassword: "SenhaInicial123!",
+    }),
+    /senha atual está incorreta/,
+  );
+
+  await store.changePassword({
+    username: "1joaodev",
+    role: "owner",
+    currentPassword: "SenhaInicial123!",
+    newPassword: "SenhaNova456!",
+    initialOwnerPassword: "SenhaInicial123!",
+  });
+
+  assert.deepEqual(
+    await store.authenticateOwner({ password: "SenhaNova456!" }),
+    { configured: true, authenticated: true },
+  );
+  assert.deepEqual(
+    await store.authenticateOwner({ password: "SenhaInicial123!" }),
+    { configured: true, authenticated: false },
+  );
+
+  const persisted = JSON.parse(await fs.readFile(store.filePath, "utf8"));
+  assert.equal(persisted.ownerCredentials.passwordHash.includes("SenhaNova456!"), false);
+  assert.equal(persisted.ownerCredentials.passwordHash.includes("SenhaInicial123!"), false);
+});
